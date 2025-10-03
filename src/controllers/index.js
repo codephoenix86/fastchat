@@ -1,0 +1,1 @@
+exports.authControllers = require('./auth')

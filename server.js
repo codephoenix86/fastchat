@@ -1,5 +1,7 @@
-const { app } = require('./src/app')
-const PORT = process.env.PORT || 3000
-app.listen(PORT, () => {
-  console.log('server listening on port:', PORT)
+const app = require('./src/app')
+const { port } = require('./src/config/env')
+const connectDB = require('./src/config/db')
+connectDB()
+app.listen(port, () => {
+  console.log('server listening on port:', port)
 })
