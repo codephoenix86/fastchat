@@ -13,6 +13,6 @@ exports.chat = async (req, res, next) => {
     },
     { _id: 1 }
   )
-  if (!chat) throw new AuthorizationError("you are not allowed to do this as you don't belong to this chat")
+  if (!chat) throw new AuthorizationError("you are not allowed to do this as you don't belong to this chat or the chat does not exists")
   next()
 }

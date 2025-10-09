@@ -13,7 +13,13 @@ exports.signup = async (req, res, next) => {
     const user = await User.create({ username, password, email, avatar, bio })
     res
       .status(201)
-      .json(new ApiResponse('user created successfully', { email, username, avatar }, 201))
+      .json(
+        new ApiResponse(
+          'user created successfully',
+          { email, username, avatar },
+          201
+        )
+      )
   } catch (err) {
     if (err.code === 11000) {
       if (err.keyValue.hasOwnProperty('email'))
@@ -25,9 +31,17 @@ exports.signup = async (req, res, next) => {
   }
 }
 exports.login = async (req, res, next) => {
-  const { email, password } = req.body
-  const { username, _id: id, avatar, role } = await validateCredentials({ email, password })
-  const [accessToken, refreshToken] = generateTokens({ id, username, role }, access, refresh)
+  const { email, username, password } = req.body
+  const {
+    _id: id,
+    avatar,
+    role,
+  } = await validateCredentials({ username, email, password })
+  const [accessToken, refreshToken] = generateTokens(
+    { id, username, role },
+    access,
+    refresh
+  )
   await RefreshToken.create({ user: id, refreshToken })
   res.status(200).json(
     new ApiResponse('user logged in successfully', {
@@ -51,7 +65,11 @@ exports.refreshToken = async (req, res, next) => {
   const token = await RefreshToken.findOne({ refreshToken, user: id })
   if (!token) throw new AuthError('invalid token')
   await token.deleteOne()
-  const [newAccessToken, newRefreshToken] = generateTokens({ id, username, role }, access, refresh)
+  const [newAccessToken, newRefreshToken] = generateTokens(
+    { id, username, role },
+    access,
+    refresh
+  )
   await RefreshToken.create({ user: id, refreshToken: newRefreshToken })
   res.status(200).json(
     new ApiResponse('token generated successfully', {

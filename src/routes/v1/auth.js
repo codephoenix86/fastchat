@@ -8,7 +8,7 @@ const asyncHandler = require('../../utils/asyncHandler')
 router.post('/signup', asyncHandler(validation.signup), asyncHandler(authControllers.signup))
 router.post(
   '/login',
-  asyncHandler(validation.fields('email', 'password')),
+  asyncHandler(validation.login),
   asyncHandler(authControllers.login)
 )
 router.post(

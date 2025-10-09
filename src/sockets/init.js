@@ -18,7 +18,6 @@ exports.init = server => {
       console.log('socket disconnected:', socket.id)
       removeSocket(userId, socket.id)
       if (!onlineUsers[userId]) {
-        console.log('success')
         await User.findByIdAndUpdate(userId, { lastSeen: Date.now() })
         socket.broadcast.emit('user:offline', { userId })
       }

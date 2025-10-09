@@ -21,7 +21,7 @@ exports.getMessages = async (req, res, next) => {
     .populate('sender', 'username avatar -_id')
     .select('content createdAt sender -_id')
     .sort({ createdAt: 1 })
-  if (!messages) throw new NotFoundError('no messages found')
+  if (messages.length === 0) throw new NotFoundError('no messages found')
   res
     .status(200)
     .json(new ApiResponse('messages fetched successfully', { messages }))
