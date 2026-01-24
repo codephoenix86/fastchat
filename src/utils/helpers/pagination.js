@@ -61,7 +61,7 @@ exports.createPaginatedResponse = (data, total, page, limit) => {
   const totalPages = Math.ceil(total / limit)
 
   return {
-    data: data,
+    data,
     pagination: {
       page,
       limit,
