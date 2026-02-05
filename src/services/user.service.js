@@ -2,10 +2,8 @@ const bcrypt = require('bcrypt')
 const path = require('path')
 const fs = require('fs').promises
 const { userRepository } = require('@repositories')
-const { errors } = require('@utils')
 const { logger } = require('@config')
-
-const { NotFoundError, AuthError, ConflictError } = errors
+const { NotFoundError, AuthenticationError, ConflictError } = require('@errors')
 
 class UserService {
   /**
@@ -21,13 +19,19 @@ class UserService {
         logger.error('Failed to create user:', {
           error: err.message,
           stack: err.stack,
-          name: err.name
+          name: err.name,
         })
         if (err.keyPattern.email) {
-          throw new ConflictError('Email already exists')
+          throw new ConflictError(
+            'This email address is already registered. Please log in instead.',
+            'EMAIL_ALREADY_EXISTS'
+          )
         }
         if (err.keyPattern.username) {
-          throw new ConflictError('Username already taken')
+          throw new ConflictError(
+            'That username is already taken. Please try another one.',
+            'USERNAME_ALREADY_TAKEN'
+          )
         }
       }
       throw err
@@ -59,7 +63,7 @@ class UserService {
     const users = await userRepository.findAll(query, { skip, limit, sort })
 
     return {
-      users: users.map(user => this.formatUser(user)),
+      users: users.map((user) => this.formatUser(user)),
       total,
     }
   }
@@ -88,12 +92,14 @@ class UserService {
     if ((updateData.email || updateData.password) && oldPassword) {
       const isValid = await bcrypt.compare(oldPassword, user.password)
       if (!isValid) {
-        throw new AuthError('Invalid old password')
+        throw new AuthenticationError('The password provided is incorrect', 'INVALID_PASSWORD')
       }
     }
 
     try {
-      const updated = await userRepository.findByIdAndUpdate(userId, updateData, { runValidators: true })
+      const updated = await userRepository.findByIdAndUpdate(userId, updateData, {
+        runValidators: true,
+      })
 
       logger.info('User updated successfully', { userId })
       return this.formatUser(updated)
@@ -102,13 +108,19 @@ class UserService {
         logger.error('Failed to update user:', {
           error: err.message,
           stack: err.stack,
-          name: err.name
+          name: err.name,
         })
         if (err.keyPattern.email) {
-          throw new ConflictError('Email already exists')
+          throw new ConflictError(
+            'This email address is already registered. Please log in instead.',
+            'EMAIL_ALREADY_EXISTS'
+          )
         }
         if (err.keyPattern.username) {
-          throw new ConflictError('Username already taken')
+          throw new ConflictError(
+            'That username is already taken. Please try another one.',
+            'USERNAME_ALREADY_TAKEN'
+          )
         }
       }
       throw err
@@ -134,7 +146,7 @@ class UserService {
           userId,
           error: err.message,
           stack: err.stack,
-          name: err.name
+          name: err.name,
         })
       }
     }
@@ -162,7 +174,7 @@ class UserService {
           error: err.message,
           stack: err.stack,
           name: err.name,
-          userId
+          userId,
         })
       }
     }
@@ -193,7 +205,7 @@ class UserService {
     // Verify old password
     const isValid = await bcrypt.compare(oldPassword, user.password)
     if (!isValid) {
-      throw new AuthError('Invalid old password')
+      throw new AuthenticationError('The password provided is incorrect', 'INVALID_PASSWORD')
     }
 
     // Update password (will be hashed by pre-save hook)
@@ -207,7 +219,9 @@ class UserService {
    * Format user object for API response
    */
   formatUser(user) {
-    if (!user) return null
+    if (!user) {
+      return null
+    }
 
     return {
       id: user._id,

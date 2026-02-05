@@ -11,40 +11,33 @@ router.param('chatId', param.validateId('chat'))
 router.param('userId', param.validateId('user'))
 
 // All chat routes require authentication
-router.use(auth.accessToken)
+router.use(asyncHandler(auth.accessToken))
 
 // Main chat resource - Full CRUD
 router
   .route('/')
   .get(asyncHandler(chatControllers.getChats))
   // Accepts: ?page=1&limit=20&type=group&sort=-createdAt
-  .post(
-    validators.chat.create,
-    asyncHandler(validate),
-    asyncHandler(chatControllers.createChat)
-  )
+  .post(validators.chat.create, validate, asyncHandler(chatControllers.createChat))
 
 router
   .route('/:chatId')
   .get(asyncHandler(chatControllers.getChat))
-  .patch(
-    validators.chat.update,
-    asyncHandler(validate),
-    asyncHandler(chatControllers.updateChat)
-  )
-  .delete(asyncHandler(chatControllers.deleteChat))
+  .patch(validators.chat.update, validate, asyncHandler(chatControllers.updateChat))
+  .delete(validators.chat.delete, validate, asyncHandler(chatControllers.deleteChat))
 
 // Members as sub-resource (RESTful)
 router
   .route('/:chatId/members')
   .get(asyncHandler(chatControllers.getMembers))
-  .post(
-    validators.chat.addMember,
-    asyncHandler(validate),
-    asyncHandler(chatControllers.addMember)
-  )
+  .post(validators.chat.addMember, validate, asyncHandler(chatControllers.addMember))
 
-router.delete('/:chatId/members/:userId', asyncHandler(chatControllers.removeMember))
+router.delete(
+  '/:chatId/members/:userId',
+  validators.chat.removeMember,
+  validate,
+  asyncHandler(chatControllers.removeMember)
+)
 
 // Nested message routes
 router.use('/:chatId/messages', messageRouter)

@@ -10,7 +10,7 @@ exports.pushPendingMessages = async (socket, userId) => {
   try {
     const messages = await messageService.getPendingMessages(userId)
 
-    messages.forEach(message => {
+    messages.forEach((message) => {
       socket.emit('message:new', {
         id: message.id,
         content: message.content,
@@ -30,7 +30,7 @@ exports.pushPendingMessages = async (socket, userId) => {
       userId,
       error: err.message,
       stack: err.stack,
-      name: err.name
+      name: err.name,
     })
   }
 }

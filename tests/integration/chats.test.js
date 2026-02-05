@@ -1,6 +1,8 @@
 const request = require('supertest')
+const {
+  db: { clearDatabase },
+} = require('@tests/helpers')
 const app = require('@/app')
-const { connectTestDB, clearDatabase, disconnectTestDB } = require('./setup')
 const {
   createTestUser,
   createTestUsers,
@@ -10,16 +12,9 @@ const {
   expectPagination,
 } = require('./helpers')
 const { CHAT_TYPES } = require('@constants')
+const { StatusCodes } = require('http-status-codes')
 
 describe('Chats API', () => {
-  beforeAll(async () => {
-    await connectTestDB()
-  })
-
-  afterAll(async () => {
-    await disconnectTestDB()
-  })
-
   beforeEach(async () => {
     await clearDatabase()
   })
@@ -36,7 +31,7 @@ describe('Chats API', () => {
           participants: [user2.user._id.toString()],
         })
 
-      expectSuccess(response, 201, 'Chat created successfully')
+      expectSuccess(response, StatusCodes.CREATED, 'Chat created successfully')
       expect(response.body.data.chat.type).toBe(CHAT_TYPES.PRIVATE)
       expect(response.body.data.chat.participants).toHaveLength(2)
     })
@@ -53,7 +48,7 @@ describe('Chats API', () => {
           participants: [user2.user._id.toString(), user3.user._id.toString()],
         })
 
-      expectSuccess(response, 201)
+      expectSuccess(response, StatusCodes.CREATED)
       expect(response.body.data.chat.type).toBe(CHAT_TYPES.GROUP)
       expect(response.body.data.chat.name).toBe('Test Group')
       expect(response.body.data.chat.admin).toBe(user1.user._id.toString())
@@ -71,7 +66,7 @@ describe('Chats API', () => {
           participants: [user2.user._id.toString()],
         })
 
-      expectError(response, 400, 'VALIDATION_ERROR')
+      expectError(response, StatusCodes.BAD_REQUEST, 'VALIDATION_FAILED')
     })
 
     it('should return 400 for invalid chat type', async () => {
@@ -85,7 +80,7 @@ describe('Chats API', () => {
           participants: [user2.user._id.toString()],
         })
 
-      expectError(response, 400, 'VALIDATION_ERROR')
+      expectError(response, StatusCodes.BAD_REQUEST, 'VALIDATION_FAILED')
     })
 
     it('should return 400 when private chat has more than 2 participants', async () => {
@@ -99,7 +94,7 @@ describe('Chats API', () => {
           participants: [user2.user._id.toString(), user3.user._id.toString()],
         })
 
-      expectError(response, 400, 'VALIDATION_ERROR')
+      expectError(response, StatusCodes.BAD_REQUEST, 'VALIDATION_FAILED')
     })
 
     it('should return 400 when group chat has less than 2 participants', async () => {
@@ -114,7 +109,7 @@ describe('Chats API', () => {
           participants: [],
         })
 
-      expectError(response, 400, 'VALIDATION_ERROR')
+      expectError(response, StatusCodes.BAD_REQUEST, 'VALIDATION_FAILED')
     })
 
     it('should return 400 for duplicate participants', async () => {
@@ -129,7 +124,7 @@ describe('Chats API', () => {
           participants: [user2.user._id.toString(), user2.user._id.toString()],
         })
 
-      expectError(response, 400, 'VALIDATION_ERROR')
+      expectError(response, StatusCodes.BAD_REQUEST, 'VALIDATION_FAILED')
     })
 
     it('should return 400 for invalid participant ID', async () => {
@@ -143,7 +138,7 @@ describe('Chats API', () => {
           participants: ['invalid-id'],
         })
 
-      expectError(response, 400, 'VALIDATION_ERROR')
+      expectError(response, StatusCodes.BAD_REQUEST, 'VALIDATION_FAILED')
     })
 
     it('should return 400 when participants do not exist', async () => {
@@ -156,8 +151,7 @@ describe('Chats API', () => {
           type: CHAT_TYPES.PRIVATE,
           participants: ['507f1f77bcf86cd799439011'],
         })
-
-      expectError(response, 400, 'VALIDATION_ERROR')
+      expectError(response, StatusCodes.BAD_REQUEST, 'VALIDATION_FAILED')
     })
   })
 
@@ -172,7 +166,7 @@ describe('Chats API', () => {
         .get('/api/v1/chats')
         .set('Authorization', `Bearer ${user1.tokens.accessToken}`)
 
-      expectSuccess(response, 200, 'Chats fetched successfully')
+      expectSuccess(response, StatusCodes.OK, 'Chats fetched successfully')
       expect(response.body.data).toBeInstanceOf(Array)
       expect(response.body.data.length).toBe(2)
       expectPagination(response)
@@ -192,7 +186,7 @@ describe('Chats API', () => {
         .set('Authorization', `Bearer ${user1.tokens.accessToken}`)
         .query({ type: CHAT_TYPES.GROUP })
 
-      expectSuccess(response, 200)
+      expectSuccess(response, StatusCodes.OK)
       expect(response.body.pagination.total).toBe(1)
       expect(response.body.data[0].type).toBe(CHAT_TYPES.GROUP)
     })
@@ -209,7 +203,7 @@ describe('Chats API', () => {
         .set('Authorization', `Bearer ${user1.tokens.accessToken}`)
         .query({ page: 2, limit: 10 })
 
-      expectSuccess(response, 200)
+      expectSuccess(response, StatusCodes.OK)
       expect(response.body.data.length).toBe(10)
       expect(response.body.pagination.page).toBe(2)
       expect(response.body.pagination.total).toBe(25)
@@ -225,7 +219,7 @@ describe('Chats API', () => {
         .get('/api/v1/chats')
         .set('Authorization', `Bearer ${user1.tokens.accessToken}`)
 
-      expectSuccess(response, 200)
+      expectSuccess(response, StatusCodes.OK)
       expect(response.body.pagination.total).toBe(1)
     })
   })
@@ -239,7 +233,7 @@ describe('Chats API', () => {
         .get(`/api/v1/chats/${chat._id}`)
         .set('Authorization', `Bearer ${user1.tokens.accessToken}`)
 
-      expectSuccess(response, 200, 'Chat fetched successfully')
+      expectSuccess(response, StatusCodes.OK, 'Chat fetched successfully')
       expect(response.body.data.chat.id).toBe(chat._id.toString())
     })
 
@@ -250,7 +244,7 @@ describe('Chats API', () => {
         .get('/api/v1/chats/507f1f77bcf86cd799439011')
         .set('Authorization', `Bearer ${user.tokens.accessToken}`)
 
-      expectError(response, 404, 'NOT_FOUND')
+      expectError(response, StatusCodes.NOT_FOUND, 'NOT_FOUND')
     })
 
     it('should return 403 when user is not a participant', async () => {
@@ -261,7 +255,7 @@ describe('Chats API', () => {
         .get(`/api/v1/chats/${chat._id}`)
         .set('Authorization', `Bearer ${user3.tokens.accessToken}`)
 
-      expectError(response, 403, 'FORBIDDEN')
+      expectError(response, StatusCodes.FORBIDDEN, 'NOT_A_MEMBER')
     })
 
     it('should return 400 for invalid chat id', async () => {
@@ -271,7 +265,7 @@ describe('Chats API', () => {
         .get('/api/v1/chats/invalid-id')
         .set('Authorization', `Bearer ${user.tokens.accessToken}`)
 
-      expectError(response, 400, 'VALIDATION_ERROR')
+      expectError(response, StatusCodes.BAD_REQUEST, 'BAD_REQUEST')
     })
   })
 
@@ -288,7 +282,7 @@ describe('Chats API', () => {
         .set('Authorization', `Bearer ${user1.tokens.accessToken}`)
         .send({ groupName: 'New Name' })
 
-      expectSuccess(response, 200, 'Chat updated successfully')
+      expectSuccess(response, StatusCodes.OK, 'Chat updated successfully')
       expect(response.body.data.chat.name).toBe('New Name')
     })
 
@@ -304,7 +298,7 @@ describe('Chats API', () => {
         .set('Authorization', `Bearer ${user1.tokens.accessToken}`)
         .send({ admin: user2.user._id.toString() })
 
-      expectSuccess(response, 200)
+      expectSuccess(response, StatusCodes.OK)
       expect(response.body.data.chat.admin).toBe(user2.user._id.toString())
     })
 
@@ -317,7 +311,7 @@ describe('Chats API', () => {
         .set('Authorization', `Bearer ${user1.tokens.accessToken}`)
         .send({ groupName: 'New Name' })
 
-      expectError(response, 400, 'VALIDATION_ERROR')
+      expectError(response, StatusCodes.BAD_REQUEST, 'VALIDATION_FAILED')
     })
 
     it('should return 403 when non-admin tries to update', async () => {
@@ -332,7 +326,7 @@ describe('Chats API', () => {
         .set('Authorization', `Bearer ${user2.tokens.accessToken}`)
         .send({ groupName: 'New Name' })
 
-      expectError(response, 403, 'FORBIDDEN')
+      expectError(response, StatusCodes.FORBIDDEN, 'ADMIN_REQUIRED')
     })
 
     it('should return 400 when admin is not a participant', async () => {
@@ -347,7 +341,7 @@ describe('Chats API', () => {
         .set('Authorization', `Bearer ${user1.tokens.accessToken}`)
         .send({ admin: user3.user._id.toString() })
 
-      expectError(response, 400, 'VALIDATION_ERROR')
+      expectError(response, StatusCodes.BAD_REQUEST, 'VALIDATION_FAILED')
     })
 
     it('should return 400 when no fields are provided', async () => {
@@ -360,9 +354,8 @@ describe('Chats API', () => {
       const response = await request(app)
         .patch(`/api/v1/chats/${chat._id}`)
         .set('Authorization', `Bearer ${user1.tokens.accessToken}`)
-        .send({})
 
-      expectError(response, 400, 'VALIDATION_ERROR')
+      expectError(response, StatusCodes.BAD_REQUEST, 'VALIDATION_FAILED')
     })
   })
 
@@ -378,7 +371,7 @@ describe('Chats API', () => {
         .delete(`/api/v1/chats/${chat._id}`)
         .set('Authorization', `Bearer ${user1.tokens.accessToken}`)
 
-      expectSuccess(response, 200, 'Chat deleted successfully')
+      expectSuccess(response, StatusCodes.OK, 'Chat deleted successfully')
 
       // Verify chat is deleted
       const deletedChat = await require('@models').Chat.findById(chat._id)
@@ -393,7 +386,7 @@ describe('Chats API', () => {
         .delete(`/api/v1/chats/${chat._id}`)
         .set('Authorization', `Bearer ${user1.tokens.accessToken}`)
 
-      expectError(response, 400, 'VALIDATION_ERROR')
+      expectError(response, StatusCodes.BAD_REQUEST, 'VALIDATION_FAILED')
     })
 
     it('should return 403 when non-admin tries to delete', async () => {
@@ -407,7 +400,7 @@ describe('Chats API', () => {
         .delete(`/api/v1/chats/${chat._id}`)
         .set('Authorization', `Bearer ${user2.tokens.accessToken}`)
 
-      expectError(response, 403, 'FORBIDDEN')
+      expectError(response, StatusCodes.FORBIDDEN, 'ADMIN_REQUIRED')
     })
   })
 
@@ -423,7 +416,7 @@ describe('Chats API', () => {
         .get(`/api/v1/chats/${chat._id}/members`)
         .set('Authorization', `Bearer ${user1.tokens.accessToken}`)
 
-      expectSuccess(response, 200, 'Members fetched successfully')
+      expectSuccess(response, StatusCodes.OK, 'Members fetched successfully')
       expect(response.body.data.members).toBeInstanceOf(Array)
       expect(response.body.data.members.length).toBe(3)
     })
@@ -436,7 +429,7 @@ describe('Chats API', () => {
         .get(`/api/v1/chats/${chat._id}/members`)
         .set('Authorization', `Bearer ${user3.tokens.accessToken}`)
 
-      expectError(response, 403, 'FORBIDDEN')
+      expectError(response, StatusCodes.FORBIDDEN, 'NOT_A_MEMBER')
     })
   })
 
@@ -453,7 +446,7 @@ describe('Chats API', () => {
         .set('Authorization', `Bearer ${user1.tokens.accessToken}`)
         .send({ userId: user3.user._id.toString() })
 
-      expectSuccess(response, 200, 'Member added successfully')
+      expectSuccess(response, StatusCodes.OK, 'Member added successfully')
     })
 
     it('should allow user to add themselves', async () => {
@@ -468,7 +461,7 @@ describe('Chats API', () => {
         .set('Authorization', `Bearer ${user3.tokens.accessToken}`)
         .send({})
 
-      expectSuccess(response, 200)
+      expectSuccess(response, StatusCodes.OK)
     })
 
     it('should return 400 for private chat', async () => {
@@ -480,7 +473,7 @@ describe('Chats API', () => {
         .set('Authorization', `Bearer ${user1.tokens.accessToken}`)
         .send({ userId: user3.user._id.toString() })
 
-      expectError(response, 400, 'VALIDATION_ERROR')
+      expectError(response, StatusCodes.BAD_REQUEST, 'VALIDATION_FAILED')
     })
 
     it('should return 403 when non-admin tries to add others', async () => {
@@ -495,10 +488,10 @@ describe('Chats API', () => {
         .set('Authorization', `Bearer ${user2.tokens.accessToken}`)
         .send({ userId: user3.user._id.toString() })
 
-      expectError(response, 403, 'FORBIDDEN')
+      expectError(response, StatusCodes.FORBIDDEN, 'ADMIN_REQUIRED')
     })
 
-    it('should return 400 when member already exists', async () => {
+    it('should return 409 when member already exists', async () => {
       const [user1, user2] = await createTestUsers(2)
       const chat = await createTestChat(user1.user, [user2.user._id], {
         type: CHAT_TYPES.GROUP,
@@ -510,7 +503,7 @@ describe('Chats API', () => {
         .set('Authorization', `Bearer ${user1.tokens.accessToken}`)
         .send({ userId: user2.user._id.toString() })
 
-      expectError(response, 400, 'VALIDATION_ERROR')
+      expectError(response, StatusCodes.CONFLICT, 'ALREADY_MEMBER')
     })
   })
 
@@ -526,7 +519,7 @@ describe('Chats API', () => {
         .delete(`/api/v1/chats/${chat._id}/members/me`)
         .set('Authorization', `Bearer ${user2.tokens.accessToken}`)
 
-      expectSuccess(response, 200, 'Member removed successfully')
+      expectSuccess(response, StatusCodes.OK, 'Member removed successfully')
     })
 
     it('should allow admin to remove others', async () => {
@@ -540,7 +533,7 @@ describe('Chats API', () => {
         .delete(`/api/v1/chats/${chat._id}/members/${user2.user._id}`)
         .set('Authorization', `Bearer ${user1.tokens.accessToken}`)
 
-      expectSuccess(response, 200)
+      expectSuccess(response, StatusCodes.OK)
     })
 
     it('should return 403 when non-admin tries to remove others', async () => {
@@ -554,10 +547,10 @@ describe('Chats API', () => {
         .delete(`/api/v1/chats/${chat._id}/members/${user3.user._id}`)
         .set('Authorization', `Bearer ${user2.tokens.accessToken}`)
 
-      expectError(response, 403, 'FORBIDDEN')
+      expectError(response, StatusCodes.FORBIDDEN, 'ADMIN_REQUIRED')
     })
 
-    it('should return 403 when admin tries to leave without transfer', async () => {
+    it('should return 409 when admin tries to leave without transfer', async () => {
       const [user1, user2] = await createTestUsers(2)
       const chat = await createTestChat(user1.user, [user2.user._id], {
         type: CHAT_TYPES.GROUP,
@@ -568,7 +561,7 @@ describe('Chats API', () => {
         .delete(`/api/v1/chats/${chat._id}/members/me`)
         .set('Authorization', `Bearer ${user1.tokens.accessToken}`)
 
-      expectError(response, 403, 'FORBIDDEN')
+      expectError(response, StatusCodes.CONFLICT, 'ADMIN_TRANSFER_REQUIRED')
     })
 
     it('should delete chat when last member leaves', async () => {
@@ -594,7 +587,7 @@ describe('Chats API', () => {
         .delete(`/api/v1/chats/${chat._id}/members/me`)
         .set('Authorization', `Bearer ${user2.tokens.accessToken}`)
 
-      expectSuccess(response, 200, 'Member removed successfully')
+      expectSuccess(response, StatusCodes.OK, 'Member removed successfully')
 
       // Verify chat is deleted
       const deletedChat = await require('@models').Chat.findById(chat._id)
@@ -609,7 +602,7 @@ describe('Chats API', () => {
         .delete(`/api/v1/chats/${chat._id}/members/me`)
         .set('Authorization', `Bearer ${user1.tokens.accessToken}`)
 
-      expectError(response, 400, 'VALIDATION_ERROR')
+      expectError(response, StatusCodes.BAD_REQUEST, 'VALIDATION_FAILED')
     })
   })
 })

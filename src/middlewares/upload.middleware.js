@@ -1,7 +1,7 @@
 const multer = require('multer')
 const path = require('path')
 
-const { errors } = require('@utils')
+const { UnsupportedMediaTypeError } = require('@errors')
 const { VALIDATION } = require('@constants')
 
 const storage = multer.diskStorage({
@@ -18,8 +18,9 @@ const storage = multer.diskStorage({
 const fileFilter = (req, file, cb) => {
   if (!VALIDATION.FILE.ALLOWED_IMAGE_TYPES.includes(file.mimetype)) {
     return cb(
-      new errors.ValidationError(
-        `Only ${VALIDATION.FILE.ALLOWED_IMAGE_TYPES.join(', ')} files are allowed`
+      new UnsupportedMediaTypeError(
+        `Invalid file format. Please upload an image in one of the following formats: ${VALIDATION.FILE.ALLOWED_IMAGE_TYPES.join(', ')}`,
+        'UNSUPPORTED_FILE_TYPE'
       )
     )
   }

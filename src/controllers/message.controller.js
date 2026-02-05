@@ -1,6 +1,6 @@
 const { messageService } = require('@services')
 const { ApiResponse, pagination } = require('@utils')
-const { HTTP_STATUS } = require('@constants')
+const { StatusCodes } = require('http-status-codes')
 const { socketServer, SOCKET_EVENTS } = require('@sockets')
 
 exports.sendMessage = async (req, res) => {
@@ -14,8 +14,8 @@ exports.sendMessage = async (req, res) => {
   io.to(chatId).emit(SOCKET_EVENTS.MESSAGE_NEW, message)
 
   res
-    .status(HTTP_STATUS.CREATED)
-    .json(new ApiResponse('Message sent successfully', { message }, HTTP_STATUS.CREATED))
+    .status(StatusCodes.CREATED)
+    .json(new ApiResponse('Message sent successfully', { message }, StatusCodes.CREATED))
 }
 
 exports.getMessages = async (req, res) => {
@@ -30,13 +30,13 @@ exports.getMessages = async (req, res) => {
 
   const paginatedData = pagination.createPaginatedResponse(messages, total, page, limit)
 
-  res.status(HTTP_STATUS.OK).json(new ApiResponse('Messages fetched successfully', paginatedData))
+  res.status(StatusCodes.OK).json(new ApiResponse('Messages fetched successfully', paginatedData))
 }
 
 exports.getMessage = async (req, res) => {
   const message = await messageService.getMessageById(req.params.messageId, req.user.id)
 
-  res.status(HTTP_STATUS.OK).json(new ApiResponse('Message fetched successfully', { message }))
+  res.status(StatusCodes.OK).json(new ApiResponse('Message fetched successfully', { message }))
 }
 
 exports.updateMessage = async (req, res) => {
@@ -49,7 +49,7 @@ exports.updateMessage = async (req, res) => {
   const io = socketServer.get()
   io.to(chatId).emit(SOCKET_EVENTS.MESSAGE_UPDATED, message)
 
-  res.status(HTTP_STATUS.OK).json(new ApiResponse('Message updated successfully', { message }))
+  res.status(StatusCodes.OK).json(new ApiResponse('Message updated successfully', { message }))
 }
 
 exports.deleteMessage = async (req, res) => {
@@ -61,5 +61,5 @@ exports.deleteMessage = async (req, res) => {
   const io = socketServer.get()
   io.to(chatId).emit(SOCKET_EVENTS.MESSAGE_DELETED, { messageId })
 
-  res.status(HTTP_STATUS.OK).json(new ApiResponse('Message deleted successfully'))
+  res.status(StatusCodes.OK).json(new ApiResponse('Message deleted successfully'))
 }

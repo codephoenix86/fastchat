@@ -1,7 +1,9 @@
 const { accessToken, refreshToken } = require('@middlewares/auth.middleware')
 const { mockRequest, mockResponse, mockNext, createObjectId } = require('@tests/unit/helpers')
-const { ValidationError, AuthError } = require('@errors/errors')
-const { generateTokens } = require('@auth/jwt')
+const { AuthenticationError } = require('@errors')
+const {
+  jwt: { generateTokens },
+} = require('@utils')
 
 // Mock dependencies
 jest.mock('@repositories', () => ({
@@ -33,20 +35,20 @@ describe('Auth Middleware', () => {
       expect(next).toHaveBeenCalled()
     })
 
-    it('should throw ValidationError when token is missing', () => {
+    it('should throw AuthenticationError when token is missing', () => {
       const req = mockRequest({ headers: {} })
       const res = mockResponse()
       const next = mockNext()
 
       expect(() => {
         accessToken(req, res, next)
-      }).toThrow(ValidationError)
+      }).toThrow(AuthenticationError)
       expect(() => {
         accessToken(req, res, next)
-      }).toThrow('Authorization token missing or malformed')
+      }).toThrow('Authorization token missing')
     })
 
-    it('should throw ValidationError when authorization header is malformed', () => {
+    it('should throw AuthenticationError when authorization header is malformed', () => {
       const req = mockRequest({
         headers: { authorization: 'InvalidFormat' },
       })
@@ -55,10 +57,10 @@ describe('Auth Middleware', () => {
 
       expect(() => {
         accessToken(req, res, next)
-      }).toThrow(ValidationError)
+      }).toThrow(AuthenticationError)
     })
 
-    it('should throw AuthError when token is invalid', () => {
+    it('should throw AuthenticationError when token is invalid', () => {
       const req = mockRequest({
         headers: { authorization: 'Bearer invalid.token.here' },
       })
@@ -67,10 +69,10 @@ describe('Auth Middleware', () => {
 
       expect(() => {
         accessToken(req, res, next)
-      }).toThrow(AuthError)
+      }).toThrow(AuthenticationError)
     })
 
-    it('should throw AuthError when token is expired', () => {
+    it('should throw AuthenticationError when token is expired', () => {
       const jwt = require('jsonwebtoken')
       const { env } = require('@config')
       const expiredToken = jwt.sign({ id: 'test' }, env.JWT_SECRET, { expiresIn: '0s' })
@@ -83,11 +85,11 @@ describe('Auth Middleware', () => {
 
       expect(() => {
         accessToken(req, res, next)
-      }).toThrow(AuthError)
+      }).toThrow(AuthenticationError)
     })
   })
 
-  describe('refreshToken', () => {
+  describe('refresh_token', () => {
     beforeEach(() => {
       jest.clearAllMocks()
     })
@@ -99,6 +101,7 @@ describe('Auth Middleware', () => {
       refreshTokenRepository.exists.mockResolvedValue(true)
 
       const req = mockRequest({
+        headers: { 'content-type': 'application/x-www-form-urlencoded' },
         body: { refresh_token: tokens.refreshToken },
       })
       const res = mockResponse()
@@ -115,37 +118,32 @@ describe('Auth Middleware', () => {
       expect(next).toHaveBeenCalled()
     })
 
-    it('should throw ValidationError when refresh_token is missing', async () => {
-      const req = mockRequest({ body: {} })
-      const res = mockResponse()
-      const next = mockNext()
-
-      await expect(refreshToken(req, res, next)).rejects.toThrow(ValidationError)
-      await expect(refreshToken(req, res, next)).rejects.toThrow('refresh_token is required')
-    })
-
-    it('should throw AuthError when token does not exist in database', async () => {
+    it('should throw AuthenticationError when token does not exist in database', async () => {
       const tokens = generateTokens({ id: 'test', username: 'test', role: 'user' })
       refreshTokenRepository.exists.mockResolvedValue(null)
 
       const req = mockRequest({
+        headers: { 'content-type': 'application/x-www-form-urlencoded' },
         body: { refresh_token: tokens.refreshToken },
       })
       const res = mockResponse()
       const next = mockNext()
 
-      await expect(refreshToken(req, res, next)).rejects.toThrow(AuthError)
-      await expect(refreshToken(req, res, next)).rejects.toThrow('Invalid refresh token')
+      await expect(refreshToken(req, res, next)).rejects.toThrow(AuthenticationError)
+      await expect(refreshToken(req, res, next)).rejects.toThrow(
+        'Your session has expired. Please log in again.'
+      )
     })
 
-    it('should throw AuthError when token is invalid', async () => {
+    it('should throw AuthenticationError when token is invalid', async () => {
       const req = mockRequest({
+        headers: { 'content-type': 'application/x-www-form-urlencoded' },
         body: { refresh_token: 'invalid.token.here' },
       })
       const res = mockResponse()
       const next = mockNext()
 
-      await expect(refreshToken(req, res, next)).rejects.toThrow(AuthError)
+      await expect(refreshToken(req, res, next)).rejects.toThrow(AuthenticationError)
     })
   })
 })

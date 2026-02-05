@@ -3,11 +3,11 @@
  * Handles both regular and paginated responses
  */
 class ApiResponse {
-  constructor(message, data = null, status = 200) {
+  constructor(message, data = null) {
     this.success = true
     this.message = message
     this.timestamp = new Date().toISOString()
-    
+
     // If data contains pagination metadata, spread it to root level
     // Otherwise, nest everything under 'data' key
     if (data && typeof data === 'object' && data.pagination) {

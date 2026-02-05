@@ -1,6 +1,8 @@
 const jwt = require('jsonwebtoken')
-const { generateTokens, verifyToken } = require('@auth/jwt')
-const { AuthError } = require('@errors/errors')
+const {
+  jwt: { generateTokens, verifyToken },
+} = require('@utils')
+const { AuthenticationError } = require('@errors')
 const { env } = require('@config')
 
 describe('JWT Utilities', () => {
@@ -53,7 +55,7 @@ describe('JWT Utilities', () => {
     it('should throw AuthError for invalid token', () => {
       expect(() => {
         verifyToken('invalid.token.here', env.JWT_SECRET)
-      }).toThrow(AuthError)
+      }).toThrow(AuthenticationError)
     })
 
     it('should throw AuthError for expired token', () => {
@@ -61,7 +63,7 @@ describe('JWT Utilities', () => {
 
       expect(() => {
         verifyToken(token, env.JWT_SECRET)
-      }).toThrow(AuthError)
+      }).toThrow(AuthenticationError)
     })
 
     it('should throw AuthError for token with wrong secret', () => {
@@ -69,21 +71,21 @@ describe('JWT Utilities', () => {
 
       expect(() => {
         verifyToken(token, env.JWT_SECRET)
-      }).toThrow(AuthError)
+      }).toThrow(AuthenticationError)
     })
 
     it('should throw AuthError with appropriate message for JsonWebTokenError', () => {
       expect(() => {
         verifyToken('malformed', env.JWT_SECRET)
-      }).toThrow('Invalid token')
+      }).toThrow('The provided safety token is invalid or has been tampered with')
     })
 
     it('should throw AuthError with appropriate message for TokenExpiredError', () => {
-      const token = jwt.sign({ id: 'user123' }, env.JWT_SECRET, { expiresIn: '0s' })
+      const token = jwt.sign({ id: 'user123' }, env.JWT_SECRET, { expiresIn: '-1s' })
 
       expect(() => {
         verifyToken(token, env.JWT_SECRET)
-      }).toThrow('Token expired')
+      }).toThrow('Your session has expired. Please log in again')
     })
   })
 })

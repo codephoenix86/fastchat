@@ -3,7 +3,7 @@ const { cleanEnv, str, port, url, num } = require('envalid')
 const env = cleanEnv(process.env, {
   NODE_ENV: str({
     choices: ['development', 'test', 'production'],
-    default: 'development'
+    default: 'development',
   }),
   PORT: port({ default: 3000 }),
   MONGO_URI: url(),
@@ -14,7 +14,7 @@ const env = cleanEnv(process.env, {
   ALLOWED_ORIGINS: str({ default: 'http://localhost:3000' }),
   LOG_LEVEL: str({
     choices: ['error', 'warn', 'info', 'debug'],
-    default: 'info'
+    default: 'info',
   }),
   MAX_FILE_SIZE: num({ default: 5242880 }), // 5MB
 })

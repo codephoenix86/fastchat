@@ -53,9 +53,6 @@ const clearDatabase = async () => {
  */
 const disconnectTestDB = async () => {
   try {
-    // Clear all collections first
-    await clearDatabase()
-
     if (mongoose.connection.readyState !== 0) {
       await mongoose.connection.close()
     }

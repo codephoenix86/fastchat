@@ -1,29 +1,37 @@
 const { body } = require('express-validator')
+const { message } = require('@utils')
 
 exports.sendMessage = [
   body('content')
     .exists()
-    .withMessage('Message content is required')
+    .withMessage(message('Message content is required', 'REQUIRED_FIELD', 'content'))
     .bail()
     .isString()
-    .withMessage('Message content must be text')
+    .withMessage(message('Message content must be text', 'TYPE_MISMATCH', 'string'))
+    .bail()
     .trim()
     .notEmpty()
-    .withMessage('Message content cannot be empty')
+    .withMessage(message('Message content cannot be empty', 'EMPTY_VALUE', 'non-empty string'))
     .isLength({ max: 5000 })
-    .withMessage('Message content must not exceed 5000 characters'),
+    .withMessage(
+      message('Message content must not exceed 5000 characters', 'TOO_LONG', 'max:5000_chars')
+    ),
 ]
 
 exports.updateMessage = [
   body('content')
     .exists()
-    .withMessage('Message content is required')
+    .withMessage(message('Message content is required', 'REQUIRED_FIELD', 'content'))
     .bail()
     .isString()
-    .withMessage('Message content must be text')
+    .withMessage(message('Message content must be text', 'TYPE_MISMATCH', 'string'))
+    .bail()
     .trim()
     .notEmpty()
-    .withMessage('Message content cannot be empty')
+    .withMessage(message('Message content cannot be empty', 'EMPTY_VALUE', 'non-empty string'))
+    .bail()
     .isLength({ max: 5000 })
-    .withMessage('Message content must not exceed 5000 characters'),
+    .withMessage(
+      message('Message content must not exceed 5000 characters', 'TOO_LONG', 'max:5000_chars')
+    ),
 ]

@@ -1,6 +1,6 @@
 const { validationResult } = require('express-validator')
 const validate = require('@middlewares/validation.middleware')
-const { ValidationError } = require('@errors/errors')
+const { ValidationError } = require('@errors')
 const { mockRequest, mockResponse, mockNext } = require('@tests/unit/helpers')
 
 jest.mock('express-validator')
@@ -28,12 +28,12 @@ describe('Validation Middleware', () => {
   it('should throw ValidationError when validation fails', () => {
     const errors = [
       {
-        msg: 'Email is required',
+        msg: { text: 'Email is required', code: 'REQUIRED_FIELD', expected: 'email' },
         path: 'email',
         location: 'body',
       },
       {
-        msg: 'Password is too short',
+        msg: { text: 'Password is too short', code: 'TOO_SHORT', expected: 'min:8_chars' },
         path: 'password',
         location: 'body',
       },
@@ -55,14 +55,18 @@ describe('Validation Middleware', () => {
     try {
       validate(req, res, next)
     } catch (error) {
-      expect(error.message).toBe('Validation failed')
+      expect(error.message).toBe('Invalid request data')
       expect(error.errors).toEqual([
         {
+          code: 'REQUIRED_FIELD',
+          expected: 'email',
           message: 'Email is required',
           field: 'email',
           location: 'body',
         },
         {
+          code: 'TOO_SHORT',
+          expected: 'min:8_chars',
           message: 'Password is too short',
           field: 'password',
           location: 'body',
@@ -76,7 +80,11 @@ describe('Validation Middleware', () => {
       isEmpty: () => false,
       array: () => [
         {
-          msg: 'Username is invalid',
+          msg: {
+            text: 'Invalid username format',
+            code: 'TYPE_MISMATCH',
+            expected: 'string',
+          },
           path: 'username',
           location: 'body',
         },
@@ -91,8 +99,10 @@ describe('Validation Middleware', () => {
       validate(req, res, next)
     } catch (error) {
       expect(error.errors[0]).toEqual({
-        message: 'Username is invalid',
         field: 'username',
+        message: 'Invalid username format',
+        code: 'TYPE_MISMATCH',
+        expected: 'string',
         location: 'body',
       })
     }

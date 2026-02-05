@@ -1,47 +1,55 @@
 const { User } = require('@models')
 
 class UserRepository {
-  async create(userData) {
-    return await User.create(userData)
+  create(userData) {
+    return User.create(userData)
   }
 
-  async findById(userId) {
-    return await User.findById(userId)
+  findById(userId) {
+    return User.findById(userId)
   }
 
-  async findByIdWithPassword(userId) {
-    return await User.findById(userId).select('+password')
+  findByIdWithPassword(userId) {
+    return User.findById(userId).select('+password')
   }
 
-  async findOne(query) {
-    return await User.findOne(query)
+  findOne(query) {
+    return User.findOne(query)
   }
 
-  async findOneWithPassword(query) {
-    return await User.findOne(query).select('+password')
+  findOneWithPassword(query) {
+    return User.findOne(query).select('+password')
   }
 
-  async findAll(query, options = {}) {
+  findAll(query, options = {}) {
     const { skip = 0, limit = 20, sort = { createdAt: -1 } } = options
-    return await User.find(query).sort(sort).skip(skip).limit(limit).select('-password')
+    return User.find(query).sort(sort).skip(skip).limit(limit).select('-password')
   }
 
-  async countDocuments(query) {
-    return await User.countDocuments(query)
+  countDocuments(query) {
+    return User.countDocuments(query)
   }
 
-  async findByIdAndUpdate(userId, updateData, options = {}) {
-    return await User.findByIdAndUpdate(userId, { $set: updateData }, { new: true, runValidators: true, ...options })
+  findByIdAndUpdate(userId, updateData, options = {}) {
+    return User.findByIdAndUpdate(
+      userId,
+      { $set: updateData },
+      { new: true, runValidators: true, ...options }
+    )
   }
 
-  async findByIdAndDelete(userId) {
-    return await User.findByIdAndDelete(userId)
+  findByIdAndDelete(userId) {
+    return User.findByIdAndDelete(userId)
   }
-  async deleteAvatar(userId) {
-    return await User.findByIdAndUpdate(userId, { $unset: { avatar: "" } }, { new: true, runValidators: true })
+  deleteAvatar(userId) {
+    return User.findByIdAndUpdate(
+      userId,
+      { $unset: { avatar: '' } },
+      { new: true, runValidators: true }
+    )
   }
-  async exists(query) {
-    return await User.exists(query)
+  exists(query) {
+    return User.exists(query)
   }
 }
 

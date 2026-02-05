@@ -1,8 +1,6 @@
 const {
-  parsePaginationParams,
-  parseFilterParams,
-  createPaginatedResponse,
-} = require('@helpers/pagination')
+  pagination: { parseFilterParams, createPaginatedResponse, parsePaginationParams },
+} = require('@utils')
 
 describe('Pagination Utilities', () => {
   describe('parsePaginationParams', () => {

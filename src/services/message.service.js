@@ -1,9 +1,7 @@
 const { messageRepository, chatRepository } = require('@repositories')
 const { MESSAGE_STATUS } = require('@constants')
-const { errors } = require('@utils')
 const { logger } = require('@config')
-
-const { NotFoundError, AuthorizationError } = errors
+const { NotFoundError, AuthorizationError } = require('@errors')
 
 class MessageService {
   async sendMessage(messageData, senderId) {
@@ -17,7 +15,7 @@ class MessageService {
 
     // Verify sender is a participant
     if (!chat.participants.includes(senderId)) {
-      throw new AuthorizationError('You are not a member of this chat')
+      throw new AuthorizationError('You are not a member of this chat', 'NOT_A_MEMBER')
     }
 
     const message = await messageRepository.create({
@@ -46,7 +44,7 @@ class MessageService {
     }
 
     if (!chat.participants.includes(userId)) {
-      throw new AuthorizationError('You are not a member of this chat')
+      throw new AuthorizationError('You are not a member of this chat', 'NOT_A_MEMBER')
     }
 
     // Get total count
@@ -61,7 +59,7 @@ class MessageService {
     )
 
     return {
-      messages: messages.map(message => this.formatMessage(message)),
+      messages: messages.map((message) => this.formatMessage(message)),
       total,
     }
   }
@@ -77,7 +75,7 @@ class MessageService {
     // Verify user is a participant of the chat
     const chat = await chatRepository.findById(message.chat)
     if (!chat || !chat.participants.includes(userId)) {
-      throw new AuthorizationError('You are not authorized to view this message')
+      throw new AuthorizationError('You are not a member of this chat', 'NOT_A_MEMBER')
     }
 
     return this.formatMessage(message)
@@ -92,7 +90,7 @@ class MessageService {
 
     // Only sender can edit message
     if (message.sender.toString() !== userId) {
-      throw new AuthorizationError('You can only edit your own messages')
+      throw new AuthorizationError('Only the author can modify this message', 'NOT_MESSAGE_OWNER')
     }
 
     message.content = content
@@ -112,7 +110,7 @@ class MessageService {
 
     // Only sender can delete message
     if (message.sender.toString() !== userId) {
-      throw new AuthorizationError('You can only delete your own messages')
+      throw new AuthorizationError('Only the author can delete this message', 'NOT_MESSAGE_OWNER')
     }
 
     await messageRepository.findByIdAndDelete(messageId)
@@ -134,7 +132,7 @@ class MessageService {
   async getPendingMessages(userId) {
     // Get all chats user is part of
     const chats = await chatRepository.findAll({ participants: userId }, {})
-    const chatIds = chats.map(chat => chat._id)
+    const chatIds = chats.map((chat) => chat._id)
 
     // Get all messages that are still in 'sent' status
     const populateFields = { path: 'sender', select: 'username avatar' }
@@ -147,11 +145,13 @@ class MessageService {
       populateFields
     )
 
-    return messages.map(message => this.formatMessage(message))
+    return messages.map((message) => this.formatMessage(message))
   }
 
   formatMessage(message) {
-    if (!message) return null
+    if (!message) {
+      return null
+    }
 
     return {
       id: message._id,

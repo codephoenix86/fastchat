@@ -78,7 +78,7 @@ GET /health
 POST /api/v1/auth/signup
 POST /api/v1/auth/login
 POST /api/v1/auth/logout
-POST /api/v1/auth/refresh-token
+POST /api/v1/auth/refresh
 
 # Users
 GET    /api/v1/users
@@ -128,11 +128,15 @@ fastchat/
 │   ├── routes/          # API routes
 │   ├── services/        # Business logic
 │   ├── sockets/         # Socket.io implementation
-│   └── utils/           # Helper functions
+│   ├── utils/           # Helper functions
+│   ├── constants/       # App-wide constants and enums
+│   ├── errors/          # Custom error classes and handling
+│   └── app.js           # Express application setup
 ├── tests/               # Test suites
 ├── uploads/             # User-uploaded files
 ├── logs/                # Application logs
-└── docs/                # Documentation
+├── docs/                # Documentation
+└── server.js            # Server entry point
 ```
 
 ## License

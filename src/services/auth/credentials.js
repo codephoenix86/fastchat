@@ -1,9 +1,7 @@
 const bcrypt = require('bcrypt')
 const { userRepository } = require('@repositories')
-const { errors } = require('@utils')
+const { AuthenticationError } = require('@errors')
 const { logger } = require('@config')
-
-const { AuthError } = errors
 
 /**
  * Verify user credentials
@@ -12,23 +10,26 @@ const { AuthError } = errors
  */
 exports.verifyCredentials = async ({ email, username, password }) => {
   const query = {}
-  if (username) query.username = username
-  else if (email) query.email = email
+  if (username) {
+    query.username = username
+  } else if (email) {
+    query.email = email
+  }
 
   const user = await userRepository.findOneWithPassword(query)
 
   if (!user) {
     logger.warn('Login attempt with invalid credentials', { email, username })
-    throw new AuthError('Invalid credentials')
+    throw new AuthenticationError('Invalid email/username or password', 'INVALID_CREDENTIALS')
   }
 
   const match = await bcrypt.compare(password, user.password)
 
   if (!match) {
     logger.warn('Login attempt with incorrect password', {
-      userId: user._id
+      userId: user._id,
     })
-    throw new AuthError('Invalid credentials')
+    throw new AuthenticationError('Invalid email/username or password', 'INVALID_CREDENTIALS')
   }
 
   return user

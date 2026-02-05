@@ -41,35 +41,11 @@ Comprehensive testing documentation for fastchat application.
 
 ```
 tests/
-├── integration/                # API Integration Tests
-│   ├── setup.js                # Integration-specific DB/Server config
-│   ├── helpers.js              # Integration-specific utilities
-│   ├── auth.test.js            # Authentication endpoints
-│   ├── users.test.js           # User management
-│   ├── chats.test.js           # Chat operations
-│   ├── messages.test.js        # Message operations
-│   ├── health.test.js          # Health checks
-│   └── errors.test.js          # Error scenarios
-│
-├── unit/                       # Unit Tests
-│   ├── middlewares/            # Middleware logic
-│   │   ├── auth.middleware.test.js
-│   │   ├── param.middleware.test.js
-│   │   ├── sanitize.middleware.test.js
-│   │   └── validation.middleware.test.js
-│   ├── services/               # Business logic
-│   │   ├── auth.service.test.js
-│   │   ├── user.service.test.js
-│   │   └── chat.service.test.js
-│   ├── utils/                  # Utility functions
-│   │   ├── asyncHandler.test.js
-│   │   ├── jwt.test.js
-│   │   ├── errors.test.js
-│   │   ├── pagination.test.js
-│   │   └── response.test.js
-│   └── helpers.js              # Shared unit utilities
-│
-└── setups.js                   # Global test configuration & hooks
+├── unit/                # Unit tests for individual functions/logic
+├── integration/         # API integration tests
+├── fixtures/            # Mock data and sample payloads
+├── helpers/             # Test-specific utility functions
+└── setup.js             # Global test configuration and hooks
 ```
 
 ---

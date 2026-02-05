@@ -1,17 +1,12 @@
 const request = require('supertest')
 const app = require('@/app')
-const { connectTestDB, clearDatabase, disconnectTestDB } = require('./setup')
+const {
+  db: { clearDatabase },
+} = require('@tests/helpers')
 const { createTestUser, expectError } = require('./helpers')
+const { StatusCodes } = require('http-status-codes')
 
 describe('Error Handling', () => {
-  beforeAll(async () => {
-    await connectTestDB()
-  })
-
-  afterAll(async () => {
-    await disconnectTestDB()
-  })
-
   beforeEach(async () => {
     await clearDatabase()
   })
@@ -20,7 +15,7 @@ describe('Error Handling', () => {
     it('should return 404 for non-existent route', async () => {
       const response = await request(app).get('/api/v1/nonexistent')
 
-      expect(response.status).toBe(404)
+      expect(response.status).toBe(StatusCodes.NOT_FOUND)
       expect(response.body.success).toBe(false)
       expect(response.body.message).toBe('Route not found')
       expect(response.body.timestamp).toBeDefined()
@@ -29,21 +24,21 @@ describe('Error Handling', () => {
     it('should return 404 for invalid API version', async () => {
       const response = await request(app).get('/api/v2/users')
 
-      expect(response.status).toBe(404)
+      expect(response.status).toBe(StatusCodes.NOT_FOUND)
       expect(response.body.success).toBe(false)
     })
 
     it('should return 404 for non-existent nested route', async () => {
       const response = await request(app).get('/api/v1/users/me/invalid')
 
-      expect(response.status).toBe(404)
+      expect(response.status).toBe(StatusCodes.NOT_FOUND)
       expect(response.body.success).toBe(false)
     })
 
     it('should return 404 with proper error structure', async () => {
       const response = await request(app).get('/invalid/path')
 
-      expect(response.status).toBe(404)
+      expect(response.status).toBe(StatusCodes.NOT_FOUND)
       expect(response.body).toMatchObject({
         success: false,
         message: expect.any(String),
@@ -54,11 +49,11 @@ describe('Error Handling', () => {
   })
 
   describe('Authentication Errors', () => {
-    it('should return 400 for missing authorization header', async () => {
+    it('should return 401 for missing authorization header', async () => {
       const response = await request(app).get('/api/v1/users/me')
 
-      expectError(response, 400, 'VALIDATION_ERROR')
-      expect(response.body.error.message).toContain('Authorization token')
+      expectError(response, StatusCodes.UNAUTHORIZED, 'MISSING_TOKEN')
+      expect(response.body.error.message).toBe('Authorization token missing')
     })
 
     it('should return 401 for invalid token', async () => {
@@ -66,7 +61,7 @@ describe('Error Handling', () => {
         .get('/api/v1/users/me')
         .set('Authorization', 'Bearer invalid_token')
 
-      expectError(response, 401, 'AUTHENTICATION_ERROR')
+      expectError(response, StatusCodes.UNAUTHORIZED, 'INVALID_TOKEN')
     })
 
     it('should return 401 for expired token', async () => {
@@ -79,7 +74,7 @@ describe('Error Handling', () => {
         .get('/api/v1/users/me')
         .set('Authorization', `Bearer ${expiredToken}`)
 
-      expectError(response, 401, 'AUTHENTICATION_ERROR')
+      expectError(response, StatusCodes.UNAUTHORIZED, 'TOKEN_EXPIRED')
     })
 
     it('should return 401 for malformed token', async () => {
@@ -87,17 +82,17 @@ describe('Error Handling', () => {
         .get('/api/v1/users/me')
         .set('Authorization', 'Bearer not.a.valid.token')
 
-      expectError(response, 401, 'AUTHENTICATION_ERROR')
+      expectError(response, StatusCodes.UNAUTHORIZED, 'INVALID_TOKEN')
     })
 
-    it('should return 400 for missing Bearer prefix', async () => {
+    it('should return 401 for missing Bearer prefix', async () => {
       const { tokens } = await createTestUser()
 
       const response = await request(app)
         .get('/api/v1/users/me')
         .set('Authorization', tokens.accessToken)
 
-      expectError(response, 400, 'VALIDATION_ERROR')
+      expectError(response, StatusCodes.UNAUTHORIZED, 'INVALID_TOKEN')
     })
   })
 
@@ -109,7 +104,7 @@ describe('Error Handling', () => {
         password: 'weak', // Too weak
       })
 
-      expectError(response, 400, 'VALIDATION_ERROR')
+      expectError(response, StatusCodes.BAD_REQUEST, 'VALIDATION_FAILED')
       expect(response.body.error.details).toBeDefined()
       expect(Array.isArray(response.body.error.details)).toBe(true)
       expect(response.body.error.details.length).toBeGreaterThan(0)
@@ -122,17 +117,17 @@ describe('Error Handling', () => {
         password: 'ValidPass@123',
       })
 
-      expectError(response, 400, 'VALIDATION_ERROR')
+      expectError(response, StatusCodes.BAD_REQUEST, 'VALIDATION_FAILED')
       expect(response.body.error.details).toBeDefined()
       const emailError = response.body.error.details.find((e) => e.field === 'email')
       expect(emailError).toBeDefined()
     })
 
     it('should validate required fields', async () => {
-      const response = await request(app).post('/api/v1/auth/login').send({})
+      const response = await request(app).post('/api/v1/auth/login')
 
-      expectError(response, 400, 'VALIDATION_ERROR')
-      expect(response.body.error.message).toContain('Validation failed')
+      expectError(response, StatusCodes.BAD_REQUEST, 'VALIDATION_FAILED')
+      expect(response.body.error.message).toBe('Invalid request data')
     })
 
     it('should validate data types', async () => {
@@ -143,7 +138,7 @@ describe('Error Handling', () => {
         .set('Authorization', `Bearer ${tokens.accessToken}`)
         .send({ newUsername: 12345 }) // Should be string
 
-      expectError(response, 400, 'VALIDATION_ERROR')
+      expectError(response, StatusCodes.BAD_REQUEST, 'VALIDATION_FAILED')
     })
   })
 
@@ -159,9 +154,9 @@ describe('Error Handling', () => {
     })
 
     it('should handle empty request body when data is required', async () => {
-      const response = await request(app).post('/api/v1/auth/signup').send({})
+      const response = await request(app).post('/api/v1/auth/signup')
 
-      expectError(response, 400, 'VALIDATION_ERROR')
+      expectError(response, StatusCodes.BAD_REQUEST, 'VALIDATION_FAILED')
     })
 
     it('should handle null values appropriately', async () => {
@@ -171,20 +166,20 @@ describe('Error Handling', () => {
         password: null,
       })
 
-      expectError(response, 400, 'VALIDATION_ERROR')
+      expectError(response, StatusCodes.BAD_REQUEST, 'VALIDATION_FAILED')
     })
   })
 
   describe('Authorization Errors', () => {
     it('should return 403 when accessing resource without permission', async () => {
-      const [user1, user2] = await require('./helpers').createTestUsers(2)
-      const chat = await require('./helpers').createTestChat(user1.user, [])
+      const [user1, user2, user3] = await require('./helpers').createTestUsers(3)
+      const chat = await require('./helpers').createTestChat(user1.user, [user2.user])
 
       const response = await request(app)
         .get(`/api/v1/chats/${chat._id}`)
-        .set('Authorization', `Bearer ${user2.tokens.accessToken}`)
+        .set('Authorization', `Bearer ${user3.tokens.accessToken}`)
 
-      expectError(response, 403, 'FORBIDDEN')
+      expectError(response, StatusCodes.FORBIDDEN, 'NOT_A_MEMBER')
     })
 
     it('should return 403 when non-admin tries admin action', async () => {
@@ -199,7 +194,7 @@ describe('Error Handling', () => {
         .set('Authorization', `Bearer ${user2.tokens.accessToken}`)
         .send({ groupName: 'Hacked' })
 
-      expectError(response, 403, 'FORBIDDEN')
+      expectError(response, StatusCodes.FORBIDDEN, 'ADMIN_REQUIRED')
     })
   })
 
@@ -213,8 +208,10 @@ describe('Error Handling', () => {
         password: 'Password@123',
       })
 
-      expectError(response, 409, 'CONFLICT')
-      expect(response.body.error.message).toContain('Email already exists')
+      expectError(response, StatusCodes.CONFLICT, 'EMAIL_ALREADY_EXISTS')
+      expect(response.body.error.message).toContain(
+        'This email address is already registered. Please log in instead.'
+      )
     })
 
     it('should return 409 for duplicate username', async () => {
@@ -226,16 +223,17 @@ describe('Error Handling', () => {
         password: 'Password@123',
       })
 
-      expectError(response, 409, 'CONFLICT')
-      expect(response.body.error.message).toContain('Username already taken')
+      expectError(response, StatusCodes.CONFLICT, 'USERNAME_ALREADY_TAKEN')
+      expect(response.body.error.message).toContain(
+        'That username is already taken. Please try another one.'
+      )
     })
   })
 
   describe('Error Response Structure', () => {
     it('should include request ID in error responses', async () => {
       const response = await request(app).get('/api/v1/nonexistent')
-
-      expect(response.status).toBe(404)
+      expect(response.status).toBe(StatusCodes.NOT_FOUND)
       expect(response.body.requestId).toBeDefined()
       expect(typeof response.body.requestId).toBe('string')
     })
@@ -243,7 +241,7 @@ describe('Error Handling', () => {
     it('should include timestamp in error responses', async () => {
       const response = await request(app).get('/api/v1/nonexistent')
 
-      expect(response.status).toBe(404)
+      expect(response.status).toBe(StatusCodes.NOT_FOUND)
       expect(response.body.timestamp).toBeDefined()
       expect(typeof response.body.timestamp).toBe('string')
     })
@@ -288,7 +286,7 @@ describe('Error Handling', () => {
       const responses = await Promise.all(requests)
 
       responses.forEach((response) => {
-        expect(response.status).toBe(200)
+        expect(response.status).toBe(StatusCodes.OK)
       })
     })
   })
@@ -304,7 +302,7 @@ describe('Error Handling', () => {
           newBio: '<script>alert("xss")</script>Safe content',
         })
 
-      expect(response.status).toBe(200)
+      expect(response.status).toBe(StatusCodes.OK)
       expect(response.body.data.user.bio).not.toContain('<script>')
     })
 
@@ -318,7 +316,7 @@ describe('Error Handling', () => {
           newBio: '&lt;b&gt;Bold&lt;/b&gt;',
         })
 
-      expect(response.status).toBe(200)
+      expect(response.status).toBe(StatusCodes.OK)
       expect(response.body.data.user.bio).toBeDefined()
     })
   })
@@ -352,7 +350,7 @@ describe('Error Handling', () => {
     it('should return 404 for unsupported HTTP methods', async () => {
       const response = await request(app).put('/api/v1/auth/signup').send({})
 
-      expect(response.status).toBe(404)
+      expect(response.status).toBe(StatusCodes.NOT_FOUND)
     })
 
     it('should support correct HTTP methods for each endpoint', async () => {

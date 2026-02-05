@@ -10,7 +10,7 @@ module.exports = (io, socket) => {
   /**
    * User started typing in a chat
    */
-  socket.on(EVENTS.TYPING_START, data => {
+  socket.on(EVENTS.TYPING_START, (data) => {
     const { chatId } = data
 
     // Broadcast to all other users in the chat
@@ -29,7 +29,7 @@ module.exports = (io, socket) => {
   /**
    * User stopped typing in a chat
    */
-  socket.on(EVENTS.TYPING_STOP, data => {
+  socket.on(EVENTS.TYPING_STOP, (data) => {
     const { chatId } = data
 
     // Broadcast to all other users in the chat

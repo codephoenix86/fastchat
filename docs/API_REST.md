@@ -187,14 +187,14 @@ refresh_token=jwt_refresh_token
 
 ---
 
-### POST `/api/v1/auth/refresh-token`
+### POST `/api/v1/auth/refresh`
 
 Refresh access token using refresh token.
 
 **Request:**
 
 ```http
-POST /api/v1/auth/refresh-token
+POST /api/v1/auth/refresh
 Content-Type: application/x-www-form-urlencoded
 
 refresh_token=jwt_refresh_token

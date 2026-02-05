@@ -40,7 +40,9 @@ class OnlineUsersService {
    * @returns {Boolean} - True if this was the user's last connection
    */
   removeSocket(userId, socketId) {
-    if (!this.onlineUsers[userId]) return false
+    if (!this.onlineUsers[userId]) {
+      return false
+    }
 
     this.onlineUsers[userId].delete(socketId)
 

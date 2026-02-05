@@ -1,5 +1,8 @@
-const { jwt } = require('@utils')
+const {
+  jwt: { verifyToken },
+} = require('@utils')
 const { logger, env } = require('@config')
+const { AuthenticationError } = require('@errors')
 
 /**
  * Socket.io authentication middleware
@@ -14,10 +17,10 @@ const authenticate = (socket, next) => {
         socketId: socket.id,
         address: socket.handshake.address,
       })
-      return next(new Error('Authentication token is missing'))
+      return next(new AuthenticationError('Authorization token missing', 'MISSING_TOKEN'))
     }
 
-    const payload = jwt.verifyToken(token, env.JWT_SECRET)
+    const payload = verifyToken(token, env.JWT_SECRET)
     socket.userId = payload.id
 
     logger.debug('Socket authenticated', {

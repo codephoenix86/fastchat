@@ -5,11 +5,11 @@ const env = require('@config/env')
 
 // Mongoose connection events:
 // https://mongoosejs.com/docs/connections.html#connection-events
-mongoose.connection.on('error', err => {
+mongoose.connection.on('error', (err) => {
   logger.error('Database connection error:', {
     error: err.message,
     stack: err.stack,
-    name: err.name
+    name: err.name,
   })
 })
 mongoose.connection.on('disconnected', () => {
@@ -20,7 +20,6 @@ mongoose.connection.on('reconnected', () => {
 })
 
 const connectDB = async (dbUri = env.MONGO_URI, retries = 5) => {
-
   try {
     await mongoose.connect(dbUri, {
       maxPoolSize: 10,
@@ -40,7 +39,7 @@ const connectDB = async (dbUri = env.MONGO_URI, retries = 5) => {
 
     if (retries > 0) {
       logger.info(`Retrying connection... (${retries} attempts left)`)
-      await new Promise(resolve => setTimeout(resolve, 5000))
+      await new Promise((resolve) => setTimeout(resolve, 5000))
       return connectDB(retries - 1)
     }
 
@@ -56,7 +55,7 @@ const disconnectDB = async () => {
     logger.error('Error closing database connection:', {
       error: err.message,
       stack: err.stack,
-      name: err.name
+      name: err.name,
     })
   }
 }

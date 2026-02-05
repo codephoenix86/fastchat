@@ -11,7 +11,7 @@ module.exports = (io, socket) => {
   /**
    * Message delivered to user
    */
-  socket.on(EVENTS.MESSAGE_DELIVERED, async data => {
+  socket.on(EVENTS.MESSAGE_DELIVERED, async (data) => {
     const { messageId } = data
 
     try {
@@ -36,7 +36,7 @@ module.exports = (io, socket) => {
   /**
    * Message read by user
    */
-  socket.on(EVENTS.MESSAGE_READ, async data => {
+  socket.on(EVENTS.MESSAGE_READ, async (data) => {
     const { messageId } = data
 
     try {

@@ -1,4 +1,4 @@
-const ApiResponse = require('@response/response')
+const { ApiResponse } = require('@utils')
 
 describe('ApiResponse', () => {
   it('should create response with message and data', () => {

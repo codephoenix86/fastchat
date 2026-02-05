@@ -2,7 +2,10 @@ const request = require('supertest')
 const path = require('path')
 const fs = require('fs').promises
 const app = require('@/app')
-const { connectTestDB, clearDatabase, disconnectTestDB } = require('./setup')
+const {
+  db: { clearDatabase },
+} = require('@tests/helpers')
+const { StatusCodes } = require('http-status-codes')
 const {
   createTestUser,
   createTestUsers,
@@ -14,14 +17,6 @@ const {
 } = require('./helpers')
 
 describe('Users API', () => {
-  beforeAll(async () => {
-    await connectTestDB()
-  })
-
-  afterAll(async () => {
-    await disconnectTestDB()
-  })
-
   beforeEach(async () => {
     await clearDatabase()
   })
@@ -32,7 +27,7 @@ describe('Users API', () => {
 
       const response = await request(app).get('/api/v1/users')
 
-      expectSuccess(response, 200, 'Users fetched successfully')
+      expectSuccess(response, StatusCodes.OK, 'Users fetched successfully')
       expect(response.body.data).toBeInstanceOf(Array)
       expect(response.body.data.length).toBe(3)
       expectPagination(response)
@@ -46,7 +41,7 @@ describe('Users API', () => {
 
       const response = await request(app).get('/api/v1/users').query({ page: 2, limit: 10 })
 
-      expectSuccess(response, 200)
+      expectSuccess(response, StatusCodes.OK)
       expect(response.body.data.length).toBe(10)
       expect(response.body.pagination.page).toBe(2)
       expect(response.body.pagination.total).toBe(25)
@@ -61,7 +56,7 @@ describe('Users API', () => {
 
       const response = await request(app).get('/api/v1/users').query({ search: 'alice' })
 
-      expectSuccess(response, 200)
+      expectSuccess(response, StatusCodes.OK)
       expect(response.body.pagination.total).toBe(2)
     })
 
@@ -71,7 +66,7 @@ describe('Users API', () => {
 
       const response = await request(app).get('/api/v1/users').query({ search: 'alice' })
 
-      expectSuccess(response, 200)
+      expectSuccess(response, StatusCodes.OK)
       expect(response.body.pagination.total).toBe(1)
     })
 
@@ -82,7 +77,7 @@ describe('Users API', () => {
 
       const response = await request(app).get('/api/v1/users').query({ role: 'admin' })
 
-      expectSuccess(response, 200)
+      expectSuccess(response, StatusCodes.OK)
       expect(response.body.pagination.total).toBe(1)
     })
 
@@ -93,7 +88,7 @@ describe('Users API', () => {
 
       const response = await request(app).get('/api/v1/users').query({ sort: 'username' })
 
-      expectSuccess(response, 200)
+      expectSuccess(response, StatusCodes.OK)
       expect(response.body.data[0].username).toBe('alice')
       expect(response.body.data[2].username).toBe('charlie')
     })
@@ -103,7 +98,7 @@ describe('Users API', () => {
 
       const response = await request(app).get('/api/v1/users').query({ sort: '-createdAt' })
 
-      expectSuccess(response, 200)
+      expectSuccess(response, StatusCodes.OK)
       expect(response.body.data[0].id).toBe(user3.user._id.toString())
     })
 
@@ -112,7 +107,7 @@ describe('Users API', () => {
 
       const response = await request(app).get('/api/v1/users').query({ search: 'nonexistent' })
 
-      expectSuccess(response, 200)
+      expectSuccess(response, StatusCodes.OK)
       expect(response.body.data).toEqual([])
       expect(response.body.pagination.total).toBe(0)
     })
@@ -122,7 +117,7 @@ describe('Users API', () => {
 
       const response = await request(app).get('/api/v1/users')
 
-      expectSuccess(response, 200)
+      expectSuccess(response, StatusCodes.OK)
       response.body.data.forEach((user) => {
         expect(user.password).toBeUndefined()
       })
@@ -135,7 +130,7 @@ describe('Users API', () => {
 
       const response = await request(app).get(`/api/v1/users/${user._id}`)
 
-      expectSuccess(response, 200, 'User fetched successfully')
+      expectSuccess(response, StatusCodes.OK, 'User fetched successfully')
       expect(response.body.data.user.id).toBe(user._id.toString())
       expect(response.body.data.user.username).toBe(user.username)
       expect(response.body.data.user.email).toBe(user.email)
@@ -145,13 +140,13 @@ describe('Users API', () => {
     it('should return 404 for non-existent user', async () => {
       const response = await request(app).get('/api/v1/users/507f1f77bcf86cd799439011')
 
-      expectError(response, 404, 'NOT_FOUND')
+      expectError(response, StatusCodes.NOT_FOUND, 'NOT_FOUND')
     })
 
     it('should return 400 for invalid user id', async () => {
       const response = await request(app).get('/api/v1/users/invalid-id')
 
-      expectError(response, 400, 'VALIDATION_ERROR')
+      expectError(response, StatusCodes.BAD_REQUEST, 'BAD_REQUEST')
     })
   })
 
@@ -163,15 +158,15 @@ describe('Users API', () => {
         .get('/api/v1/users/me')
         .set('Authorization', `Bearer ${tokens.accessToken}`)
 
-      expectSuccess(response, 200, 'Current user details')
+      expectSuccess(response, StatusCodes.OK, 'Current user details')
       expect(response.body.data.user.id).toBe(user._id.toString())
       expect(response.body.data.user.username).toBe(user.username)
     })
 
-    it('should return 400 when authorization header is missing', async () => {
+    it('should return 401 when authorization header is missing', async () => {
       const response = await request(app).get('/api/v1/users/me')
 
-      expectError(response, 400, 'VALIDATION_ERROR')
+      expectError(response, StatusCodes.UNAUTHORIZED, 'MISSING_TOKEN')
     })
 
     it('should return 401 for invalid token', async () => {
@@ -179,7 +174,7 @@ describe('Users API', () => {
         .get('/api/v1/users/me')
         .set('Authorization', 'Bearer invalid_token')
 
-      expectError(response, 401, 'AUTHENTICATION_ERROR')
+      expectError(response, StatusCodes.UNAUTHORIZED, 'INVALID_TOKEN')
     })
   })
 
@@ -193,7 +188,7 @@ describe('Users API', () => {
         .set('Authorization', `Bearer ${tokens.accessToken}`)
         .send({ newUsername })
 
-      expectSuccess(response, 200, 'User updated successfully')
+      expectSuccess(response, StatusCodes.OK, 'User updated successfully')
       expect(response.body.data.user.username).toBe(newUsername)
     })
 
@@ -205,7 +200,7 @@ describe('Users API', () => {
         .set('Authorization', `Bearer ${tokens.accessToken}`)
         .send({ newBio: 'Updated bio' })
 
-      expectSuccess(response, 200)
+      expectSuccess(response, StatusCodes.OK)
       expect(response.body.data.user.bio).toBe('Updated bio')
     })
 
@@ -221,7 +216,7 @@ describe('Users API', () => {
           oldPassword: 'Password@123',
         })
 
-      expectSuccess(response, 200)
+      expectSuccess(response, StatusCodes.OK)
       expect(response.body.data.user.email).toBe(newEmail)
     })
 
@@ -236,7 +231,7 @@ describe('Users API', () => {
           oldPassword: 'Password@123',
         })
 
-      expectSuccess(response, 200)
+      expectSuccess(response, StatusCodes.OK)
     })
 
     it('should return 400 when updating email without old password', async () => {
@@ -247,7 +242,7 @@ describe('Users API', () => {
         .set('Authorization', `Bearer ${tokens.accessToken}`)
         .send({ newEmail: generateEmail() })
 
-      expectError(response, 400, 'VALIDATION_ERROR')
+      expectError(response, StatusCodes.BAD_REQUEST, 'VALIDATION_FAILED')
     })
 
     it('should return 400 when updating password without old password', async () => {
@@ -258,7 +253,7 @@ describe('Users API', () => {
         .set('Authorization', `Bearer ${tokens.accessToken}`)
         .send({ newPassword: 'NewPassword@456' })
 
-      expectError(response, 400, 'VALIDATION_ERROR')
+      expectError(response, StatusCodes.BAD_REQUEST, 'VALIDATION_FAILED')
     })
 
     it('should return 401 for incorrect old password', async () => {
@@ -272,7 +267,7 @@ describe('Users API', () => {
           oldPassword: 'WrongPassword@123',
         })
 
-      expectError(response, 401, 'AUTHENTICATION_ERROR')
+      expectError(response, StatusCodes.UNAUTHORIZED, 'INVALID_PASSWORD')
     })
 
     it('should return 409 for duplicate email', async () => {
@@ -288,7 +283,7 @@ describe('Users API', () => {
           oldPassword: 'Password@123',
         })
 
-      expectError(response, 409, 'CONFLICT')
+      expectError(response, StatusCodes.CONFLICT, 'EMAIL_ALREADY_EXISTS')
     })
 
     it('should return 409 for duplicate username', async () => {
@@ -301,7 +296,7 @@ describe('Users API', () => {
         .set('Authorization', `Bearer ${tokens.accessToken}`)
         .send({ newUsername: existingUsername })
 
-      expectError(response, 409, 'CONFLICT')
+      expectError(response, StatusCodes.CONFLICT, 'USERNAME_ALREADY_TAKEN')
     })
 
     it('should return 400 for invalid username format', async () => {
@@ -312,7 +307,7 @@ describe('Users API', () => {
         .set('Authorization', `Bearer ${tokens.accessToken}`)
         .send({ newUsername: '123invalid' })
 
-      expectError(response, 400, 'VALIDATION_ERROR')
+      expectError(response, StatusCodes.BAD_REQUEST, 'VALIDATION_FAILED')
     })
 
     it('should return 400 for bio too long', async () => {
@@ -323,7 +318,7 @@ describe('Users API', () => {
         .set('Authorization', `Bearer ${tokens.accessToken}`)
         .send({ newBio: 'a'.repeat(201) })
 
-      expectError(response, 400, 'VALIDATION_ERROR')
+      expectError(response, StatusCodes.BAD_REQUEST, 'VALIDATION_FAILED')
     })
 
     it('should return 400 when no fields are provided', async () => {
@@ -332,9 +327,8 @@ describe('Users API', () => {
       const response = await request(app)
         .patch('/api/v1/users/me')
         .set('Authorization', `Bearer ${tokens.accessToken}`)
-        .send({})
 
-      expectError(response, 400, 'VALIDATION_ERROR')
+      expectError(response, StatusCodes.BAD_REQUEST, 'VALIDATION_FAILED')
     })
   })
 
@@ -346,17 +340,17 @@ describe('Users API', () => {
         .delete('/api/v1/users/me')
         .set('Authorization', `Bearer ${tokens.accessToken}`)
 
-      expectSuccess(response, 200, 'Account deleted successfully')
+      expectSuccess(response, StatusCodes.OK, 'Account deleted successfully')
 
       // Verify user is deleted
       const deletedUser = await require('@models').User.findById(user._id)
       expect(deletedUser).toBeNull()
     })
 
-    it('should return 400 without authentication', async () => {
+    it('should return 401 without authentication', async () => {
       const response = await request(app).delete('/api/v1/users/me')
 
-      expectError(response, 400, 'VALIDATION_ERROR')
+      expectError(response, StatusCodes.UNAUTHORIZED, 'MISSING_TOKEN')
     })
   })
 
@@ -398,7 +392,7 @@ describe('Users API', () => {
         .set('Authorization', `Bearer ${tokens.accessToken}`)
         .attach('avatar', testImagePath)
 
-      expectSuccess(response, 200, 'Avatar uploaded successfully')
+      expectSuccess(response, StatusCodes.OK, 'Avatar uploaded successfully')
       expect(response.body.data.user.avatar).toBeDefined()
       expect(response.body.data.user.avatar).not.toBeNull()
     })
@@ -410,10 +404,10 @@ describe('Users API', () => {
         .post('/api/v1/users/me/avatar')
         .set('Authorization', `Bearer ${tokens.accessToken}`)
 
-      expectError(response, 400, 'VALIDATION_ERROR')
+      expectError(response, StatusCodes.BAD_REQUEST, 'BAD_REQUEST')
     })
 
-    it('should return 400 for invalid file type', async () => {
+    it('should return 415 for invalid file type', async () => {
       const { tokens } = await createTestUser()
       const txtFilePath = path.join(__dirname, '..', 'fixtures', 'test.txt')
 
@@ -428,7 +422,7 @@ describe('Users API', () => {
       // Clean up
       await fs.unlink(txtFilePath)
 
-      expectError(response, 400, 'VALIDATION_ERROR')
+      expectError(response, StatusCodes.UNSUPPORTED_MEDIA_TYPE, 'UNSUPPORTED_FILE_TYPE')
     })
   })
 
@@ -440,7 +434,7 @@ describe('Users API', () => {
         .delete('/api/v1/users/me/avatar')
         .set('Authorization', `Bearer ${tokens.accessToken}`)
 
-      expectSuccess(response, 200, 'Avatar removed successfully')
+      expectSuccess(response, StatusCodes.OK, 'Avatar removed successfully')
       expect(response.body.data.user.avatar).toBeUndefined()
     })
 
@@ -451,7 +445,7 @@ describe('Users API', () => {
         .delete('/api/v1/users/me/avatar')
         .set('Authorization', `Bearer ${tokens.accessToken}`)
 
-      expectSuccess(response, 200)
+      expectSuccess(response, StatusCodes.OK)
     })
   })
 
@@ -467,7 +461,7 @@ describe('Users API', () => {
           newPassword: 'NewPassword@456',
         })
 
-      expectSuccess(response, 200, 'Password changed successfully')
+      expectSuccess(response, StatusCodes.OK, 'Password changed successfully')
     })
 
     it('should return 400 for missing old password', async () => {
@@ -478,7 +472,7 @@ describe('Users API', () => {
         .set('Authorization', `Bearer ${tokens.accessToken}`)
         .send({ newPassword: 'NewPassword@456' })
 
-      expectError(response, 400, 'VALIDATION_ERROR')
+      expectError(response, StatusCodes.BAD_REQUEST, 'VALIDATION_FAILED')
     })
 
     it('should return 400 for missing new password', async () => {
@@ -489,7 +483,7 @@ describe('Users API', () => {
         .set('Authorization', `Bearer ${tokens.accessToken}`)
         .send({ oldPassword: 'Password@123' })
 
-      expectError(response, 400, 'VALIDATION_ERROR')
+      expectError(response, StatusCodes.BAD_REQUEST, 'VALIDATION_FAILED')
     })
 
     it('should return 401 for incorrect old password', async () => {
@@ -503,7 +497,7 @@ describe('Users API', () => {
           newPassword: 'NewPassword@456',
         })
 
-      expectError(response, 401, 'AUTHENTICATION_ERROR')
+      expectError(response, StatusCodes.UNAUTHORIZED, 'INVALID_PASSWORD')
     })
 
     it('should return 400 for weak new password', async () => {
@@ -517,7 +511,7 @@ describe('Users API', () => {
           newPassword: 'weak',
         })
 
-      expectError(response, 400, 'VALIDATION_ERROR')
+      expectError(response, StatusCodes.BAD_REQUEST, 'VALIDATION_FAILED')
     })
   })
 })

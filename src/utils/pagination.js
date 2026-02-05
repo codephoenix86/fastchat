@@ -3,7 +3,7 @@
  * @param {Object} query - Request query object
  * @returns {Object} - { page, limit, skip, sort }
  */
-exports.parsePaginationParams = query => {
+exports.parsePaginationParams = (query) => {
   const page = Math.max(1, parseInt(query.page) || 1)
   const limit = Math.min(100, Math.max(1, parseInt(query.limit) || 20))
   const skip = (page - 1) * limit
@@ -11,7 +11,7 @@ exports.parsePaginationParams = query => {
   // Parse sort: ?sort=-createdAt,username
   let sort = {}
   if (query.sort) {
-    query.sort.split(',').forEach(field => {
+    query.sort.split(',').forEach((field) => {
       if (field.startsWith('-')) {
         sort[field.substring(1)] = -1
       } else {
@@ -35,7 +35,7 @@ exports.parsePaginationParams = query => {
 exports.parseFilterParams = (query, allowedFilters = []) => {
   const filter = {}
 
-  allowedFilters.forEach(field => {
+  allowedFilters.forEach((field) => {
     if (query[field]) {
       filter[field] = query[field]
     }

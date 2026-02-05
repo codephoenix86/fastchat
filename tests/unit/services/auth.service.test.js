@@ -1,5 +1,5 @@
 const authService = require('@services/auth.service')
-const { ConflictError, AuthError } = require('@errors/errors')
+const { ConflictError, AuthenticationError } = require('@errors')
 const { createMockUser, createObjectId } = require('@tests/unit/helpers')
 
 jest.mock('@repositories')
@@ -39,7 +39,9 @@ describe('AuthService', () => {
       userRepository.create.mockRejectedValue(error)
 
       await expect(authService.signup(userData)).rejects.toThrow(ConflictError)
-      await expect(authService.signup(userData)).rejects.toThrow('Email already exists')
+      await expect(authService.signup(userData)).rejects.toThrow(
+        'This email address is already registered. Please log in instead.'
+      )
     })
 
     it('should throw ConflictError for duplicate username', async () => {
@@ -49,7 +51,9 @@ describe('AuthService', () => {
       userRepository.create.mockRejectedValue(error)
 
       await expect(authService.signup(userData)).rejects.toThrow(ConflictError)
-      await expect(authService.signup(userData)).rejects.toThrow('Username already taken')
+      await expect(authService.signup(userData)).rejects.toThrow(
+        'That username is already taken. Please try another one.'
+      )
     })
 
     it('should rethrow non-duplicate errors', async () => {
@@ -122,12 +126,14 @@ describe('AuthService', () => {
       })
     })
 
-    it('should throw AuthError when refresh token is invalid', async () => {
+    it('should throw AuthenticationError when refresh token is invalid', async () => {
       refreshTokenRepository.deleteOne.mockResolvedValue({ deletedCount: 0 })
 
-      await expect(authService.logout('userId', 'invalid_token')).rejects.toThrow(AuthError)
       await expect(authService.logout('userId', 'invalid_token')).rejects.toThrow(
-        'Invalid refresh token'
+        AuthenticationError
+      )
+      await expect(authService.logout('userId', 'invalid_token')).rejects.toThrow(
+        'Session not found or already terminated'
       )
     })
   })
@@ -150,13 +156,6 @@ describe('AuthService', () => {
 
       expect(result).toHaveProperty('accessToken')
       expect(result).toHaveProperty('refreshToken')
-    })
-
-    it('should throw AuthError when refresh token does not exist', async () => {
-      const user = { id: 'userId', username: 'test', role: 'user' }
-      refreshTokenRepository.findOne.mockResolvedValue(null)
-
-      await expect(authService.refreshAccessToken('invalid', user)).rejects.toThrow(AuthError)
     })
 
     it('should delete old refresh token', async () => {

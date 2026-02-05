@@ -14,7 +14,7 @@ let io = undefined
  * @param {Object} server - HTTP server instance
  * @returns {Object} - Socket.io server instance
  */
-exports.init = server => {
+exports.init = (server) => {
   const allowedOrigins = env.ALLOWED_ORIGINS.split(',')
 
   io = new Server(server, {
@@ -29,7 +29,7 @@ exports.init = server => {
   io.use(authenticate)
 
   // Handle new connections
-  io.on(EVENTS.CONNECTION, async socket => {
+  io.on(EVENTS.CONNECTION, async (socket) => {
     const userId = socket.userId
 
     logger.info('New socket connected', {
@@ -60,7 +60,7 @@ exports.init = server => {
     }
 
     // Handle disconnect
-    socket.on(EVENTS.DISCONNECT, async reason => {
+    socket.on(EVENTS.DISCONNECT, async (reason) => {
       logger.info('Socket disconnected', {
         socketId: socket.id,
         userId,

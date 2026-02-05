@@ -1,5 +1,5 @@
 const { validateId } = require('@middlewares/param.middleware')
-const { ValidationError } = require('@errors/errors')
+const { ValidationError } = require('@errors')
 const { mockRequest, mockResponse, mockNext, createObjectId } = require('@tests/unit/helpers')
 
 describe('Param Middleware', () => {

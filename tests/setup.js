@@ -1,15 +1,7 @@
-// Global test setup and teardown
+require('dotenv').config({ path: '.env.test' })
 
-// Set test environment FIRST (before any imports)
-process.env.NODE_ENV = 'test'
-process.env.MONGO_URI = 'mongodb://localhost:27017/fastchat-test'
-process.env.JWT_SECRET = 'test_jwt_secret_minimum_32_characters_long_here_for_testing'
-process.env.JWT_REFRESH_SECRET = 'test_refresh_secret_minimum_32_characters_long_here_for_testing'
-process.env.JWT_ACCESS_EXPIRES = '15m'
-process.env.JWT_REFRESH_EXPIRES = '7d'
-process.env.ALLOWED_ORIGINS = 'http://localhost:3000'
-process.env.LOG_LEVEL = 'error'
-process.env.MAX_FILE_SIZE = '5242880'
+const { db } = require('@tests/helpers')
+const { connectTestDB, disconnectTestDB } = db
 
 // Increase timeout for all tests
 jest.setTimeout(30000)
@@ -45,3 +37,11 @@ jest.mock('@sockets', () => ({
     USER_OFFLINE: 'user:offline',
   },
 }))
+
+beforeAll(async () => {
+  await connectTestDB()
+})
+
+afterAll(async () => {
+  await disconnectTestDB()
+})

@@ -1,5 +1,5 @@
 const { validationResult } = require('express-validator')
-const { errors } = require('@utils')
+const { ValidationError } = require('@errors')
 
 /**
  * Validate request based on express-validator rules
@@ -8,13 +8,18 @@ module.exports = (req, res, next) => {
   const errorList = validationResult(req)
 
   if (!errorList.isEmpty()) {
-    const formattedErrors = errorList.array().map(err => ({
-      message: err.msg,
-      field: err.path,
-      location: err.location,
-    }))
+    const errors = errorList.array().map((err) => {
+      const details = err.msg
+      return {
+        field: err.path,
+        message: details.text,
+        code: details.code,
+        expected: details.expected,
+        location: err.location,
+      }
+    })
 
-    throw new errors.ValidationError('Validation failed', formattedErrors)
+    throw new ValidationError('Invalid request data', errors, 'VALIDATION_FAILED')
   }
 
   next()

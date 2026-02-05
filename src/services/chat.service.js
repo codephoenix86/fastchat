@@ -1,25 +1,14 @@
-const { chatRepository, userRepository } = require('@repositories')
+const { chatRepository } = require('@repositories')
 const { CHAT_TYPES } = require('@constants')
-const { errors } = require('@utils')
 const { logger } = require('@config')
-
-const { ValidationError, NotFoundError, AuthorizationError } = errors
+const { NotFoundError, AuthorizationError, ConflictError } = require('@errors')
 
 class ChatService {
   async createChat(chatData, creatorId) {
     const { participants, type, groupName } = chatData
 
-    // Add creator to participants
-    const allParticipants = [...new Set([...participants, creatorId])]
-
-    // Verify all participants exist
-    const count = await userRepository.countDocuments({
-      _id: { $in: allParticipants },
-    })
-
-    if (count !== allParticipants.length) {
-      throw new ValidationError('One or more participants do not exist')
-    }
+    // // Add creator to participants
+    participants.push(creatorId)
 
     // Set admin for group chats
     const admin = type === CHAT_TYPES.GROUP ? creatorId : undefined
@@ -28,7 +17,7 @@ class ChatService {
       type,
       groupName: type === CHAT_TYPES.GROUP ? groupName : undefined,
       admin,
-      participants: allParticipants,
+      participants,
     })
 
     logger.info('Chat created successfully', {
@@ -55,12 +44,16 @@ class ChatService {
     // Get chats with pagination
     const populateFields = [
       { path: 'participants', select: 'username avatar' },
-      { path: 'admin', select: 'username' }
+      { path: 'admin', select: 'username' },
     ]
-    const chats = await chatRepository.findAllWithPopulate(query, { skip, limit, sort }, populateFields)
+    const chats = await chatRepository.findAllWithPopulate(
+      query,
+      { skip, limit, sort },
+      populateFields
+    )
 
     return {
-      chats: chats.map(chat => this.formatChat(chat)),
+      chats: chats.map((chat) => this.formatChat(chat)),
       total,
     }
   }
@@ -68,7 +61,7 @@ class ChatService {
   async getChatById(chatId, userId) {
     const populateFields = [
       { path: 'participants', select: 'username avatar email' },
-      { path: 'admin', select: 'username avatar' }
+      { path: 'admin', select: 'username avatar' },
     ]
     const chat = await chatRepository.findByIdWithPopulate(chatId, populateFields)
 
@@ -77,8 +70,8 @@ class ChatService {
     }
 
     // Verify user is a participant
-    if (!chat.participants.some(p => p._id.toString() === userId)) {
-      throw new AuthorizationError('You are not a member of this chat')
+    if (!chat.participants.some((p) => p._id.toString() === userId)) {
+      throw new AuthorizationError('You are not a member of this chat', 'NOT_A_MEMBER')
     }
 
     return this.formatChat(chat)
@@ -91,30 +84,19 @@ class ChatService {
       throw new NotFoundError('Chat not found')
     }
 
-    if (chat.type === CHAT_TYPES.PRIVATE) {
-      throw new ValidationError('Cannot update private chat')
-    }
-
     // Only admin can update chat
     if (chat.admin.toString() !== userId) {
-      throw new AuthorizationError('Only admin can update chat')
+      throw new AuthorizationError('Only the admin can update chat', 'ADMIN_REQUIRED')
     }
 
     // Update allowed fields
     const allowedUpdates = ['groupName', 'groupPicture', 'admin']
     const updates = {}
-    allowedUpdates.forEach(field => {
+    allowedUpdates.forEach((field) => {
       if (updateData[field] !== undefined) {
         updates[field] = updateData[field]
       }
     })
-
-    // Verify new admin is a participant
-    if (updates.admin) {
-      if (!chat.participants.includes(updates.admin)) {
-        throw new ValidationError('New admin must be a member of the group')
-      }
-    }
 
     const updated = await chatRepository.findByIdAndUpdate(chatId, { $set: updates })
 
@@ -130,13 +112,9 @@ class ChatService {
       throw new NotFoundError('Chat not found')
     }
 
-    if (chat.type === CHAT_TYPES.PRIVATE) {
-      throw new ValidationError('Cannot delete private chat')
-    }
-
     // Only admin can delete chat
     if (chat.admin.toString() !== userId) {
-      throw new AuthorizationError('Only admin can delete chat')
+      throw new AuthorizationError('Only admin can delete chat', 'ADMIN_REQUIRED')
     }
 
     await chatRepository.findByIdAndDelete(chatId)
@@ -150,19 +128,15 @@ class ChatService {
       throw new NotFoundError('Chat not found')
     }
 
-    if (chat.type === CHAT_TYPES.PRIVATE) {
-      throw new ValidationError('Cannot add members to private chat')
-    }
-
     const memberToAdd = memberIdToAdd || userId
 
     // If adding someone else, must be admin
     if (memberIdToAdd && chat.admin.toString() !== userId) {
-      throw new AuthorizationError('Only admin can add other members')
+      throw new AuthorizationError('Only admin can add other members', 'ADMIN_REQUIRED')
     }
 
     if (chat.participants.includes(memberToAdd)) {
-      throw new ValidationError('User is already a member of this group')
+      throw new ConflictError('User is already a member of this group', 'ALREADY_MEMBER')
     }
 
     await chatRepository.findByIdAndUpdate(chatId, {
@@ -179,26 +153,25 @@ class ChatService {
       throw new NotFoundError('Chat not found')
     }
 
-    if (chat.type === CHAT_TYPES.PRIVATE) {
-      throw new ValidationError('Cannot remove members from private chat')
-    }
-
     // Can remove self or admin can remove others
     const isSelf = memberIdToRemove === userId
     const isAdmin = chat.admin && chat.admin.toString() === userId
 
     if (!isSelf && !isAdmin) {
-      throw new AuthorizationError('Only admin can remove other members')
+      throw new AuthorizationError('Only admin can remove other members', 'ADMIN_REQUIRED')
     }
 
     // Admin cannot be removed unless they're the last member OR transferring ownership
     if (chat.admin && chat.admin.toString() === memberIdToRemove && chat.participants.length > 1) {
-      throw new AuthorizationError('Admin must transfer ownership before leaving')
+      throw new ConflictError(
+        'Admin must transfer ownership before leaving',
+        'ADMIN_TRANSFER_REQUIRED'
+      )
     }
 
-    if (!chat.participants.includes(memberIdToRemove)) {
-      throw new ValidationError('User is not a member of this group')
-    }
+    // if (!chat.participants.includes(memberIdToRemove)) {
+    //   throw new ValidationError('User is not a member of this group')
+    // }
 
     await chatRepository.findByIdAndUpdate(chatId, {
       $pull: { participants: memberIdToRemove },
@@ -222,15 +195,17 @@ class ChatService {
     }
 
     // Verify user is a participant
-    if (!chat.participants.some(p => p._id.toString() === userId)) {
-      throw new AuthorizationError('You are not a member of this chat')
+    if (!chat.participants.some((p) => p._id.toString() === userId)) {
+      throw new AuthorizationError('You are not a member of this chat', 'NOT_A_MEMBER')
     }
 
     return chat.participants
   }
 
   formatChat(chat) {
-    if (!chat) return null
+    if (!chat) {
+      return null
+    }
 
     return {
       id: chat._id,

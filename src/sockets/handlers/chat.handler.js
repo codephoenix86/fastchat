@@ -10,7 +10,7 @@ module.exports = (io, socket) => {
   /**
    * User joins a chat room
    */
-  socket.on(EVENTS.CHAT_JOIN, async data => {
+  socket.on(EVENTS.CHAT_JOIN, (data) => {
     const { chatId } = data
 
     socket.join(chatId)
@@ -25,7 +25,7 @@ module.exports = (io, socket) => {
   /**
    * User leaves a chat room
    */
-  socket.on(EVENTS.CHAT_LEAVE, async data => {
+  socket.on(EVENTS.CHAT_LEAVE, (data) => {
     const { chatId } = data
 
     socket.leave(chatId)

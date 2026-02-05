@@ -1,0 +1,13 @@
+# Auto-normalize line endings
+* text=auto eol=lf
+
+# Force LF for specific files
+*.js text eol=lf
+*.json text eol=lf
+*.md text eol=lf
+
+# Binary files
+*.png binary
+*.jpg binary
+*.jpeg binary
+*.gif binary

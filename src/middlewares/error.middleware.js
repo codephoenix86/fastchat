@@ -1,13 +1,14 @@
 const { logger, env } = require('@config')
-const { HTTP_STATUS } = require('@constants')
+const { StatusCodes } = require('http-status-codes')
 
 /**
  * Global error handling middleware
  */
-module.exports = (err, req, res, next) => {
+module.exports = (err, req, res, _next) => {
   // Log error with context
-  logger.error('Error occurred:', {
+  logger.error(err.name, {
     name: err.name,
+    code: err.code,
     message: err.message,
     stack: err.stack,
     url: req.originalUrl,
@@ -18,33 +19,31 @@ module.exports = (err, req, res, next) => {
   })
 
   // Operational errors (expected errors we throw)
-  if (err.operational) {
-    return res.status(err.status).json({
+  if (err.isOperational) {
+    res.status(err.statusCode).json({
       success: false,
       error: {
-        code: err.name || 'ERROR',
+        code: err.code || 'ERROR',
         message: err.message,
-        ...(err.errors && { details: err.errors })
+        ...(err.errors && { details: err.errors }),
       },
       timestamp: err.timestamp || new Date().toISOString(),
       requestId: req.id,
       ...(env.NODE_ENV === 'development' && { stack: err.stack }),
     })
+  } else {
+    // Programming or unknown errors (don't leak error details in production)
+    res.status(StatusCodes.INTERNAL_SERVER_ERROR).json({
+      success: false,
+      error: {
+        code: 'INTERNAL_SERVER_ERROR',
+        message: env.NODE_ENV === 'production' ? 'Internal server error' : err.message,
+      },
+      timestamp: new Date().toISOString(),
+      requestId: req.id,
+      ...(env.NODE_ENV === 'development' && {
+        stack: err.stack,
+      }),
+    })
   }
-
-  // Programming or unknown errors (don't leak error details in production)
-  res.status(HTTP_STATUS.INTERNAL_SERVER_ERROR).json({
-    success: false,
-    error: {
-      code: 'INTERNAL_SERVER_ERROR',
-      message: env.NODE_ENV === 'production'
-        ? 'Internal server error'
-        : err.message
-    },
-    timestamp: new Date().toISOString(),
-    requestId: req.id,
-    ...(env.NODE_ENV === 'development' && {
-      stack: err.stack,
-    }),
-  })
 }

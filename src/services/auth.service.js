@@ -1,10 +1,11 @@
 const { userRepository, refreshTokenRepository } = require('@repositories')
-const { errors, jwt } = require('@utils')
+const {
+  jwt: { generateTokens },
+} = require('@utils')
 const { logger } = require('@config')
 const { verifyCredentials } = require('./auth/credentials')
 
-const { AuthError, ConflictError } = errors
-const { generateTokens } = jwt
+const { AuthenticationError, ConflictError } = require('@errors')
 
 class AuthService {
   async signup(userData) {
@@ -13,7 +14,7 @@ class AuthService {
 
       logger.info('User registered successfully', {
         userId: user._id,
-        username: user.username
+        username: user.username,
       })
 
       return {
@@ -26,14 +27,20 @@ class AuthService {
       logger.error('Signup failed:', {
         error: err.message,
         stack: err.stack,
-        name: err.name
+        name: err.name,
       })
       if (err.code === 11000) {
         if (err.keyPattern.email) {
-          throw new ConflictError('Email already exists')
+          throw new ConflictError(
+            'This email address is already registered. Please log in instead.',
+            'EMAIL_ALREADY_EXISTS'
+          )
         }
         if (err.keyPattern.username) {
-          throw new ConflictError('Username already taken')
+          throw new ConflictError(
+            'That username is already taken. Please try another one.',
+            'USERNAME_ALREADY_TAKEN'
+          )
         }
       }
       throw err
@@ -59,7 +66,7 @@ class AuthService {
 
     logger.info('User logged in successfully', {
       userId: user._id,
-      username: user.username
+      username: user.username,
     })
 
     return {
@@ -80,7 +87,7 @@ class AuthService {
     })
 
     if (result.deletedCount === 0) {
-      throw new AuthError('Invalid refresh token')
+      throw new AuthenticationError('Session not found or already terminated', 'SESSION_NOT_FOUND')
     }
 
     logger.info('User logged out successfully', { userId })
@@ -92,10 +99,6 @@ class AuthService {
       user: user.id,
       refreshToken: oldRefreshToken,
     })
-
-    if (!tokenDoc) {
-      throw new AuthError('Invalid refresh token')
-    }
 
     // Delete old refresh token
     await refreshTokenRepository.deleteOne({ _id: tokenDoc._id })

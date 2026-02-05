@@ -1,90 +1,9 @@
 const { User, Chat, Message, RefreshToken } = require('@models')
-const { generateTokens } = require('@auth/jwt')
+const {
+  jwt: { generateTokens },
+} = require('@utils')
 const { CHAT_TYPES } = require('@constants')
-
-/**
- * Comprehensive API response format validator
- */
-const validateResponseFormat = (response, expectedStatus) => {
-  // Basic structure
-  expect(response.status).toBe(expectedStatus)
-  expect(response.body).toHaveProperty('success')
-  expect(response.body).toHaveProperty('timestamp')
-  expect(typeof response.body.timestamp).toBe('string')
-
-  // Validate timestamp is ISO format
-  expect(() => new Date(response.body.timestamp)).not.toThrow()
-}
-
-/**
- * Validate success response format
- */
-const validateSuccessResponse = (response, expectedStatus = 200) => {
-  validateResponseFormat(response, expectedStatus)
-  expect(response.body.success).toBe(true)
-  expect(response.body).toHaveProperty('message')
-  expect(typeof response.body.message).toBe('string')
-}
-
-/**
- * Validate error response format
- */
-const validateErrorResponse = (response, expectedStatus, expectedErrorCode = null) => {
-  validateResponseFormat(response, expectedStatus)
-  expect(response.body.success).toBe(false)
-  expect(response.body).toHaveProperty('error')
-  expect(response.body.error).toHaveProperty('code')
-  expect(response.body.error).toHaveProperty('message')
-  expect(response.body).toHaveProperty('requestId')
-
-  if (expectedErrorCode) {
-    expect(response.body.error.code).toBe(expectedErrorCode)
-  }
-
-  // Validation errors should have details array
-  if (response.body.error.code === 'VALIDATION_ERROR') {
-    if (response.body.error.details) {
-      expect(Array.isArray(response.body.error.details)).toBe(true)
-      response.body.error.details.forEach((detail) => {
-        expect(detail).toHaveProperty('message')
-        expect(detail).toHaveProperty('field')
-        expect(detail).toHaveProperty('location')
-      })
-    }
-  }
-}
-
-/**
- * Validate paginated response format
- */
-const validatePaginatedResponse = (response, expectedStatus = 200) => {
-  validateSuccessResponse(response, expectedStatus)
-  expect(response.body).toHaveProperty('data')
-  expect(Array.isArray(response.body.data)).toBe(true)
-  expect(response.body).toHaveProperty('pagination')
-
-  const { pagination } = response.body
-  expect(pagination).toHaveProperty('page')
-  expect(pagination).toHaveProperty('limit')
-  expect(pagination).toHaveProperty('total')
-  expect(pagination).toHaveProperty('totalPages')
-  expect(pagination).toHaveProperty('hasNextPage')
-  expect(pagination).toHaveProperty('hasPrevPage')
-
-  expect(typeof pagination.page).toBe('number')
-  expect(typeof pagination.limit).toBe('number')
-  expect(typeof pagination.total).toBe('number')
-  expect(typeof pagination.totalPages).toBe('number')
-  expect(typeof pagination.hasNextPage).toBe('boolean')
-  expect(typeof pagination.hasPrevPage).toBe('boolean')
-
-  // Validate pagination logic
-  expect(pagination.page).toBeGreaterThanOrEqual(1)
-  expect(pagination.limit).toBeGreaterThanOrEqual(1)
-  expect(pagination.limit).toBeLessThanOrEqual(100)
-  expect(pagination.total).toBeGreaterThanOrEqual(0)
-  expect(pagination.totalPages).toBeGreaterThanOrEqual(0)
-}
+const { StatusCodes } = require('http-status-codes')
 
 // Counter for unique usernames/emails
 let userCounter = 0
@@ -203,11 +122,11 @@ const createTestMessage = async (chat, sender, overrides = {}) => {
 /**
  * Common error response assertions
  * @param {Object} response - Supertest response
- * @param {Number} status - Expected status code
+ * @param {Number} statusCode - Expected status code
  * @param {String} errorCode - Expected error code/name
  */
-const expectError = (response, status, errorCode = null) => {
-  expect(response.status).toBe(status)
+const expectError = (response, statusCode, errorCode = null) => {
+  expect(response.status).toBe(statusCode)
   expect(response.body.success).toBe(false)
   expect(response.body.error).toBeDefined()
   expect(response.body.error.message).toBeDefined()
@@ -224,7 +143,7 @@ const expectError = (response, status, errorCode = null) => {
  * @param {Number} status - Expected status code
  * @param {String} message - Expected message (optional)
  */
-const expectSuccess = (response, status = 200, message = null) => {
+const expectSuccess = (response, status = StatusCodes.OK, message = null) => {
   expect(response.status).toBe(status)
   expect(response.body.success).toBe(true)
   expect(response.body.timestamp).toBeDefined()
@@ -265,8 +184,4 @@ module.exports = {
   generateUsername,
   generateEmail,
   wait,
-  validateResponseFormat,
-  validateSuccessResponse,
-  validateErrorResponse,
-  validatePaginatedResponse,
 }

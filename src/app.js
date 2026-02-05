@@ -68,6 +68,7 @@ app.use((req, res) => {
     message: 'Route not found',
     status: 404,
     timestamp: new Date().toISOString(),
+    requestId: req.id,
   })
 })
 

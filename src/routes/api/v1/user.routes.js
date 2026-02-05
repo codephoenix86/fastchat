@@ -8,35 +8,35 @@ const router = express.Router()
 // Protected routes - Current user
 router
   .route('/me')
-  .get(auth.accessToken, asyncHandler(userControllers.getCurrentUser))
+  .get(asyncHandler(auth.accessToken), asyncHandler(userControllers.getCurrentUser))
   .patch(
-    auth.accessToken,
     validators.user.update,
-    asyncHandler(validate),
+    validate,
+    asyncHandler(auth.accessToken),
     asyncHandler(userControllers.updateCurrentUser)
   )
-  .delete(auth.accessToken, asyncHandler(userControllers.deleteCurrentUser))
+  .delete(asyncHandler(auth.accessToken), asyncHandler(userControllers.deleteCurrentUser))
 
 // Avatar as sub-resource
 router
   .route('/me/avatar')
   .post(
-    auth.accessToken,
+    asyncHandler(auth.accessToken),
     upload.single('avatar'),
     asyncHandler(userControllers.uploadAvatar)
   )
-  .delete(auth.accessToken, asyncHandler(userControllers.deleteAvatar))
+  .delete(asyncHandler(auth.accessToken), asyncHandler(userControllers.deleteAvatar))
 
 // Password management
 router.patch(
   '/me/password',
-  auth.accessToken,
   validators.user.changePassword,
-  asyncHandler(validate),
+  validate,
+  asyncHandler(auth.accessToken),
   asyncHandler(userControllers.changePassword)
 )
 
-// Parameterized routes 
+// Parameterized routes
 router.param('id', param.validateId('user'))
 
 // Public routes

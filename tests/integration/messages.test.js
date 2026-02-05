@@ -1,6 +1,9 @@
 const request = require('supertest')
 const app = require('@/app')
-const { connectTestDB, clearDatabase, disconnectTestDB } = require('./setup')
+const {
+  db: { clearDatabase },
+} = require('@tests/helpers')
+const { StatusCodes } = require('http-status-codes')
 const {
   createTestUser,
   createTestUsers,
@@ -13,14 +16,6 @@ const {
 const { CHAT_TYPES } = require('@constants')
 
 describe('Messages API', () => {
-  beforeAll(async () => {
-    await connectTestDB()
-  })
-
-  afterAll(async () => {
-    await disconnectTestDB()
-  })
-
   beforeEach(async () => {
     await clearDatabase()
   })
@@ -35,7 +30,7 @@ describe('Messages API', () => {
         .set('Authorization', `Bearer ${user1.tokens.accessToken}`)
         .send({ content: 'Hello, world!' })
 
-      expectSuccess(response, 201, 'Message sent successfully')
+      expectSuccess(response, StatusCodes.CREATED, 'Message sent successfully')
       expect(response.body.data.message.content).toBe('Hello, world!')
       expect(response.body.data.message.sender).toBe(user1.user._id.toString())
       expect(response.body.data.message.chat).toBe(chat._id.toString())
@@ -51,7 +46,7 @@ describe('Messages API', () => {
         .set('Authorization', `Bearer ${user1.tokens.accessToken}`)
         .send({ content: '' })
 
-      expectError(response, 400, 'VALIDATION_ERROR')
+      expectError(response, StatusCodes.BAD_REQUEST, 'VALIDATION_FAILED')
     })
 
     it('should return 400 for missing content', async () => {
@@ -61,9 +56,8 @@ describe('Messages API', () => {
       const response = await request(app)
         .post(`/api/v1/chats/${chat._id}/messages`)
         .set('Authorization', `Bearer ${user1.tokens.accessToken}`)
-        .send({})
 
-      expectError(response, 400, 'VALIDATION_ERROR')
+      expectError(response, StatusCodes.BAD_REQUEST, 'VALIDATION_FAILED')
     })
 
     it('should return 400 for content too long', async () => {
@@ -75,7 +69,7 @@ describe('Messages API', () => {
         .set('Authorization', `Bearer ${user1.tokens.accessToken}`)
         .send({ content: 'a'.repeat(5001) })
 
-      expectError(response, 400, 'VALIDATION_ERROR')
+      expectError(response, StatusCodes.BAD_REQUEST, 'VALIDATION_FAILED')
     })
 
     it('should return 404 for non-existent chat', async () => {
@@ -86,7 +80,7 @@ describe('Messages API', () => {
         .set('Authorization', `Bearer ${user.tokens.accessToken}`)
         .send({ content: 'Hello' })
 
-      expectError(response, 404, 'NOT_FOUND')
+      expectError(response, StatusCodes.NOT_FOUND, 'NOT_FOUND')
     })
 
     it('should return 403 when user is not a participant', async () => {
@@ -98,7 +92,7 @@ describe('Messages API', () => {
         .set('Authorization', `Bearer ${user3.tokens.accessToken}`)
         .send({ content: 'Hello' })
 
-      expectError(response, 403, 'FORBIDDEN')
+      expectError(response, StatusCodes.FORBIDDEN, 'NOT_A_MEMBER')
     })
 
     it('should return 400 for invalid chat id', async () => {
@@ -109,7 +103,7 @@ describe('Messages API', () => {
         .set('Authorization', `Bearer ${user.tokens.accessToken}`)
         .send({ content: 'Hello' })
 
-      expectError(response, 400, 'VALIDATION_ERROR')
+      expectError(response, StatusCodes.BAD_REQUEST, 'BAD_REQUEST')
     })
   })
 
@@ -126,7 +120,7 @@ describe('Messages API', () => {
         .get(`/api/v1/chats/${chat._id}/messages`)
         .set('Authorization', `Bearer ${user1.tokens.accessToken}`)
 
-      expectSuccess(response, 200, 'Messages fetched successfully')
+      expectSuccess(response, StatusCodes.OK, 'Messages fetched successfully')
       expect(response.body.data).toBeInstanceOf(Array)
       expect(response.body.data.length).toBe(3)
       expectPagination(response)
@@ -146,27 +140,29 @@ describe('Messages API', () => {
         .set('Authorization', `Bearer ${user1.tokens.accessToken}`)
         .query({ page: 1, limit: 50 })
 
-      expectSuccess(response, 200)
+      expectSuccess(response, StatusCodes.OK)
       expect(response.body.data.length).toBe(50)
       expect(response.body.pagination.page).toBe(1)
       expect(response.body.pagination.total).toBe(60)
       expect(response.body.pagination.hasNextPage).toBe(true)
     })
 
-    it('should sort messages by createdAt ascending by default', async () => {
-      const [user1, user2] = await createTestUsers(2)
+    it('should sort messages by createdAt descending by default', async () => {
+      const [user1, user2, user3] = await createTestUsers(3)
       const chat = await createTestChat(user1.user, [user2.user._id])
 
       const msg1 = await createTestMessage(chat, user1.user, { content: 'First' })
-      const msg3 = await createTestMessage(chat, user1.user, { content: 'Third' })
+      const msg2 = await createTestMessage(chat, user2.user, { content: 'Second' })
+      const msg3 = await createTestMessage(chat, user3.user, { content: 'Third' })
 
       const response = await request(app)
         .get(`/api/v1/chats/${chat._id}/messages`)
         .set('Authorization', `Bearer ${user1.tokens.accessToken}`)
 
-      expectSuccess(response, 200)
-      expect(response.body.data[0].id).toBe(msg1._id.toString())
-      expect(response.body.data[2].id).toBe(msg3._id.toString())
+      expectSuccess(response, StatusCodes.OK)
+      expect(response.body.data[0].id).toBe(msg3._id.toString())
+      expect(response.body.data[1].id).toBe(msg2._id.toString())
+      expect(response.body.data[2].id).toBe(msg1._id.toString())
     })
 
     it('should return 404 for non-existent chat', async () => {
@@ -176,7 +172,7 @@ describe('Messages API', () => {
         .get('/api/v1/chats/507f1f77bcf86cd799439011/messages')
         .set('Authorization', `Bearer ${user.tokens.accessToken}`)
 
-      expectError(response, 404, 'NOT_FOUND')
+      expectError(response, StatusCodes.NOT_FOUND, 'NOT_FOUND')
     })
 
     it('should return 403 when user is not a participant', async () => {
@@ -187,7 +183,7 @@ describe('Messages API', () => {
         .get(`/api/v1/chats/${chat._id}/messages`)
         .set('Authorization', `Bearer ${user3.tokens.accessToken}`)
 
-      expectError(response, 403, 'FORBIDDEN')
+      expectError(response, StatusCodes.FORBIDDEN, 'NOT_A_MEMBER')
     })
 
     it('should populate sender information', async () => {
@@ -198,7 +194,7 @@ describe('Messages API', () => {
       const response = await request(app)
         .get(`/api/v1/chats/${chat._id}/messages`)
         .set('Authorization', `Bearer ${user1.tokens.accessToken}`)
-      expectSuccess(response, 200)
+      expectSuccess(response, StatusCodes.OK)
       expect(response.body.data[0].sender).toBeDefined()
       expect(response.body.data[0].sender.username).toBe(user1.user.username)
     })
@@ -214,7 +210,7 @@ describe('Messages API', () => {
         .get(`/api/v1/chats/${chat._id}/messages/${message._id}`)
         .set('Authorization', `Bearer ${user1.tokens.accessToken}`)
 
-      expectSuccess(response, 200, 'Message fetched successfully')
+      expectSuccess(response, StatusCodes.OK, 'Message fetched successfully')
       expect(response.body.data.message.id).toBe(message._id.toString())
       expect(response.body.data.message.content).toBe(message.content)
     })
@@ -227,7 +223,7 @@ describe('Messages API', () => {
         .get(`/api/v1/chats/${chat._id}/messages/507f1f77bcf86cd799439011`)
         .set('Authorization', `Bearer ${user1.tokens.accessToken}`)
 
-      expectError(response, 404, 'NOT_FOUND')
+      expectError(response, StatusCodes.NOT_FOUND, 'NOT_FOUND')
     })
 
     it('should return 403 when user is not in chat', async () => {
@@ -239,7 +235,7 @@ describe('Messages API', () => {
         .get(`/api/v1/chats/${chat._id}/messages/${message._id}`)
         .set('Authorization', `Bearer ${user3.tokens.accessToken}`)
 
-      expectError(response, 403, 'FORBIDDEN')
+      expectError(response, StatusCodes.FORBIDDEN, 'NOT_A_MEMBER')
     })
 
     it('should return 400 for invalid message id', async () => {
@@ -250,7 +246,7 @@ describe('Messages API', () => {
         .get(`/api/v1/chats/${chat._id}/messages/invalid-id`)
         .set('Authorization', `Bearer ${user1.tokens.accessToken}`)
 
-      expectError(response, 400, 'VALIDATION_ERROR')
+      expectError(response, StatusCodes.BAD_REQUEST, 'BAD_REQUEST')
     })
   })
 
@@ -265,7 +261,7 @@ describe('Messages API', () => {
         .set('Authorization', `Bearer ${user1.tokens.accessToken}`)
         .send({ content: 'Updated content' })
 
-      expectSuccess(response, 200, 'Message updated successfully')
+      expectSuccess(response, StatusCodes.OK, 'Message updated successfully')
       expect(response.body.data.message.content).toBe('Updated content')
     })
 
@@ -279,7 +275,7 @@ describe('Messages API', () => {
         .set('Authorization', `Bearer ${user2.tokens.accessToken}`)
         .send({ content: 'Hacked' })
 
-      expectError(response, 403, 'FORBIDDEN')
+      expectError(response, StatusCodes.FORBIDDEN, 'NOT_MESSAGE_OWNER')
     })
 
     it('should return 400 for empty content', async () => {
@@ -292,7 +288,7 @@ describe('Messages API', () => {
         .set('Authorization', `Bearer ${user1.tokens.accessToken}`)
         .send({ content: '' })
 
-      expectError(response, 400, 'VALIDATION_ERROR')
+      expectError(response, StatusCodes.BAD_REQUEST, 'VALIDATION_FAILED')
     })
 
     it('should return 400 for content too long', async () => {
@@ -305,7 +301,7 @@ describe('Messages API', () => {
         .set('Authorization', `Bearer ${user1.tokens.accessToken}`)
         .send({ content: 'a'.repeat(5001) })
 
-      expectError(response, 400, 'VALIDATION_ERROR')
+      expectError(response, StatusCodes.BAD_REQUEST, 'VALIDATION_FAILED')
     })
 
     it('should return 404 for non-existent message', async () => {
@@ -317,7 +313,7 @@ describe('Messages API', () => {
         .set('Authorization', `Bearer ${user1.tokens.accessToken}`)
         .send({ content: 'Updated' })
 
-      expectError(response, 404, 'NOT_FOUND')
+      expectError(response, StatusCodes.NOT_FOUND, 'NOT_FOUND')
     })
   })
 
@@ -331,7 +327,7 @@ describe('Messages API', () => {
         .delete(`/api/v1/chats/${chat._id}/messages/${message._id}`)
         .set('Authorization', `Bearer ${user1.tokens.accessToken}`)
 
-      expectSuccess(response, 200, 'Message deleted successfully')
+      expectSuccess(response, StatusCodes.OK, 'Message deleted successfully')
 
       // Verify message is deleted
       const deletedMessage = await require('@models').Message.findById(message._id)
@@ -347,7 +343,7 @@ describe('Messages API', () => {
         .delete(`/api/v1/chats/${chat._id}/messages/${message._id}`)
         .set('Authorization', `Bearer ${user2.tokens.accessToken}`)
 
-      expectError(response, 403, 'FORBIDDEN')
+      expectError(response, StatusCodes.FORBIDDEN, 'NOT_MESSAGE_OWNER')
     })
 
     it('should return 404 for non-existent message', async () => {
@@ -358,7 +354,7 @@ describe('Messages API', () => {
         .delete(`/api/v1/chats/${chat._id}/messages/507f1f77bcf86cd799439011`)
         .set('Authorization', `Bearer ${user1.tokens.accessToken}`)
 
-      expectError(response, 404, 'NOT_FOUND')
+      expectError(response, StatusCodes.NOT_FOUND, 'NOT_FOUND')
     })
 
     it('should return 400 for invalid message id', async () => {
@@ -369,7 +365,7 @@ describe('Messages API', () => {
         .delete(`/api/v1/chats/${chat._id}/messages/invalid-id`)
         .set('Authorization', `Bearer ${user1.tokens.accessToken}`)
 
-      expectError(response, 400, 'VALIDATION_ERROR')
+      expectError(response, StatusCodes.BAD_REQUEST, 'BAD_REQUEST')
     })
   })
 
@@ -386,7 +382,7 @@ describe('Messages API', () => {
         .set('Authorization', `Bearer ${user1.tokens.accessToken}`)
         .send({ content: 'Group message' })
 
-      expectSuccess(response, 201)
+      expectSuccess(response, StatusCodes.CREATED)
       expect(response.body.data.message.content).toBe('Group message')
     })
 
@@ -405,7 +401,7 @@ describe('Messages API', () => {
         .get(`/api/v1/chats/${chat._id}/messages`)
         .set('Authorization', `Bearer ${user1.tokens.accessToken}`)
 
-      expectSuccess(response, 200)
+      expectSuccess(response, StatusCodes.OK)
       expect(response.body.pagination.total).toBe(3)
     })
 
@@ -421,7 +417,7 @@ describe('Messages API', () => {
         .set('Authorization', `Bearer ${user3.tokens.accessToken}`)
         .send({ content: 'Unauthorized message' })
 
-      expectError(response, 403, 'FORBIDDEN')
+      expectError(response, StatusCodes.FORBIDDEN, 'NOT_A_MEMBER')
     })
   })
 
@@ -437,7 +433,7 @@ describe('Messages API', () => {
         .set('Authorization', `Bearer ${user1.tokens.accessToken}`)
         .send({ content: specialContent })
 
-      expectSuccess(response, 201)
+      expectSuccess(response, StatusCodes.CREATED)
       // Content should be sanitized
       expect(response.body.data.message.content).toBeDefined()
     })
@@ -453,7 +449,7 @@ describe('Messages API', () => {
         .set('Authorization', `Bearer ${user1.tokens.accessToken}`)
         .send({ content: emojiContent })
 
-      expectSuccess(response, 201)
+      expectSuccess(response, StatusCodes.CREATED)
       expect(response.body.data.message.content).toContain('👋')
     })
 
@@ -468,7 +464,7 @@ describe('Messages API', () => {
         .set('Authorization', `Bearer ${user1.tokens.accessToken}`)
         .send({ content: multilineContent })
 
-      expectSuccess(response, 201)
+      expectSuccess(response, StatusCodes.CREATED)
       expect(response.body.data.message.content).toBe(multilineContent)
     })
 
@@ -481,7 +477,7 @@ describe('Messages API', () => {
         .set('Authorization', `Bearer ${user1.tokens.accessToken}`)
         .send({ content: '   trimmed   ' })
 
-      expectSuccess(response, 201)
+      expectSuccess(response, StatusCodes.CREATED)
       expect(response.body.data.message.content).toBe('trimmed')
     })
   })

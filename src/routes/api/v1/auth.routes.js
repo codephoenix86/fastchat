@@ -6,33 +6,24 @@ const { asyncHandler } = require('@utils')
 
 const router = express.Router()
 
-router.post(
-  '/signup',
-  validators.auth.signup,
-  asyncHandler(validate),
-  asyncHandler(authControllers.signup)
-)
+router.post('/signup', validators.auth.signup, validate, asyncHandler(authControllers.signup))
 
-router.post(
-  '/login',
-  validators.auth.login,
-  asyncHandler(validate),
-  asyncHandler(authControllers.login)
-)
+router.post('/login', validators.auth.login, validate, asyncHandler(authControllers.login))
 
 router.post(
   '/logout',
   validators.auth.logout,
-  asyncHandler(validate),
-  auth.refreshToken,
+  validate,
+  asyncHandler(auth.accessToken),
+  asyncHandler(auth.refreshToken),
   asyncHandler(authControllers.logout)
 )
 
 router.post(
-  '/refresh-token',
+  '/refresh',
   validators.auth.refreshToken,
-  asyncHandler(validate),
-  auth.refreshToken,
+  validate,
+  asyncHandler(auth.refreshToken),
   asyncHandler(authControllers.refreshToken)
 )
 

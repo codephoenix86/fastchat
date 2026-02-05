@@ -53,18 +53,8 @@ module.exports = {
     '^@utils$': '<rootDir>/src/utils',
     '^@utils/(.*)$': '<rootDir>/src/utils/$1',
 
-    // utils sub-aliases
-    '^@auth$': '<rootDir>/src/utils/auth',
-    '^@auth/(.*)$': '<rootDir>/src/utils/auth/$1',
-
-    '^@errors$': '<rootDir>/src/utils/errors',
-    '^@errors/(.*)$': '<rootDir>/src/utils/errors/$1',
-
-    '^@helpers$': '<rootDir>/src/utils/helpers',
-    '^@helpers/(.*)$': '<rootDir>/src/utils/helpers/$1',
-
-    '^@response$': '<rootDir>/src/utils/response',
-    '^@response/(.*)$': '<rootDir>/src/utils/response/$1',
+    '^@errors$': '<rootDir>/src/errors',
+    '^@errors/(.*)$': '<rootDir>/src/errors/$1',
   },
 
   collectCoverageFrom: [

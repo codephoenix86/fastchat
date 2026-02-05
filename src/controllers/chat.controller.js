@@ -1,6 +1,6 @@
 const { chatService } = require('@services')
 const { ApiResponse, pagination } = require('@utils')
-const { HTTP_STATUS } = require('@constants')
+const { StatusCodes } = require('http-status-codes')
 
 exports.createChat = async (req, res) => {
   const { participants, type, groupName } = req.body
@@ -8,8 +8,8 @@ exports.createChat = async (req, res) => {
   const chat = await chatService.createChat({ participants, type, groupName }, req.user.id)
 
   res
-    .status(HTTP_STATUS.CREATED)
-    .json(new ApiResponse('Chat created successfully', { chat }, HTTP_STATUS.CREATED))
+    .status(StatusCodes.CREATED)
+    .json(new ApiResponse('Chat created successfully', { chat }, StatusCodes.CREATED))
 }
 
 exports.getChats = async (req, res) => {
@@ -30,13 +30,13 @@ exports.getChats = async (req, res) => {
 
   const paginatedData = pagination.createPaginatedResponse(chats, total, page, limit)
 
-  res.status(HTTP_STATUS.OK).json(new ApiResponse('Chats fetched successfully', paginatedData))
+  res.status(StatusCodes.OK).json(new ApiResponse('Chats fetched successfully', paginatedData))
 }
 
 exports.getChat = async (req, res) => {
   const chat = await chatService.getChatById(req.params.chatId, req.user.id)
 
-  res.status(HTTP_STATUS.OK).json(new ApiResponse('Chat fetched successfully', { chat }))
+  res.status(StatusCodes.OK).json(new ApiResponse('Chat fetched successfully', { chat }))
 }
 
 exports.updateChat = async (req, res) => {
@@ -48,13 +48,13 @@ exports.updateChat = async (req, res) => {
     admin,
   })
 
-  res.status(HTTP_STATUS.OK).json(new ApiResponse('Chat updated successfully', { chat }))
+  res.status(StatusCodes.OK).json(new ApiResponse('Chat updated successfully', { chat }))
 }
 
 exports.deleteChat = async (req, res) => {
   await chatService.deleteChat(req.params.chatId, req.user.id)
 
-  res.status(HTTP_STATUS.OK).json(new ApiResponse('Chat deleted successfully'))
+  res.status(StatusCodes.OK).json(new ApiResponse('Chat deleted successfully'))
 }
 
 exports.addMember = async (req, res) => {
@@ -62,7 +62,7 @@ exports.addMember = async (req, res) => {
 
   await chatService.addMember(req.params.chatId, req.user.id, userId)
 
-  res.status(HTTP_STATUS.OK).json(new ApiResponse('Member added successfully'))
+  res.status(StatusCodes.OK).json(new ApiResponse('Member added successfully'))
 }
 
 exports.removeMember = async (req, res) => {
@@ -70,11 +70,11 @@ exports.removeMember = async (req, res) => {
 
   await chatService.removeMember(req.params.chatId, req.user.id, memberIdToRemove)
 
-  res.status(HTTP_STATUS.OK).json(new ApiResponse('Member removed successfully'))
+  res.status(StatusCodes.OK).json(new ApiResponse('Member removed successfully'))
 }
 
 exports.getMembers = async (req, res) => {
   const members = await chatService.getMembers(req.params.chatId, req.user.id)
 
-  res.status(HTTP_STATUS.OK).json(new ApiResponse('Members fetched successfully', { members }))
+  res.status(StatusCodes.OK).json(new ApiResponse('Members fetched successfully', { members }))
 }

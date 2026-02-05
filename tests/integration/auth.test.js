@@ -1,6 +1,9 @@
 const request = require('supertest')
+const {
+  db: { clearDatabase },
+} = require('@tests/helpers')
 const app = require('@/app')
-const { connectTestDB, clearDatabase, disconnectTestDB } = require('./setup')
+const { StatusCodes } = require('http-status-codes')
 const {
   createTestUser,
   expectError,
@@ -11,14 +14,6 @@ const {
 const { User, RefreshToken } = require('@models')
 
 describe('Auth API', () => {
-  beforeAll(async () => {
-    await connectTestDB()
-  })
-
-  afterAll(async () => {
-    await disconnectTestDB()
-  })
-
   beforeEach(async () => {
     await clearDatabase()
   })
@@ -33,7 +28,7 @@ describe('Auth API', () => {
 
       const response = await request(app).post('/api/v1/auth/signup').send(userData)
 
-      expectSuccess(response, 201, 'User created successfully')
+      expectSuccess(response, StatusCodes.CREATED, 'User created successfully')
       expect(response.body.data.user).toBeDefined()
       expect(response.body.data.user.username).toBe(userData.username)
       expect(response.body.data.user.email).toBe(userData.email)
@@ -56,8 +51,10 @@ describe('Auth API', () => {
         password: 'Password@123',
       })
 
-      expectError(response, 409, 'CONFLICT')
-      expect(response.body.error.message).toBe('Email already exists')
+      expectError(response, StatusCodes.CONFLICT, 'EMAIL_ALREADY_EXISTS')
+      expect(response.body.error.message).toBe(
+        'This email address is already registered. Please log in instead.'
+      )
     })
 
     it('should return 409 for duplicate username', async () => {
@@ -71,8 +68,10 @@ describe('Auth API', () => {
         password: 'Password@123',
       })
 
-      expectError(response, 409, 'CONFLICT')
-      expect(response.body.error.message).toBe('Username already taken')
+      expectError(response, StatusCodes.CONFLICT, 'USERNAME_ALREADY_TAKEN')
+      expect(response.body.error.message).toBe(
+        'That username is already taken. Please try another one.'
+      )
     })
 
     it('should return 400 for missing email', async () => {
@@ -81,7 +80,7 @@ describe('Auth API', () => {
         password: 'Password@123',
       })
 
-      expectError(response, 400, 'VALIDATION_ERROR')
+      expectError(response, StatusCodes.BAD_REQUEST, 'VALIDATION_FAILED')
     })
 
     it('should return 400 for invalid email format', async () => {
@@ -91,7 +90,7 @@ describe('Auth API', () => {
         password: 'Password@123',
       })
 
-      expectError(response, 400, 'VALIDATION_ERROR')
+      expectError(response, StatusCodes.BAD_REQUEST, 'VALIDATION_FAILED')
     })
 
     it('should return 400 for missing username', async () => {
@@ -100,7 +99,7 @@ describe('Auth API', () => {
         password: 'Password@123',
       })
 
-      expectError(response, 400, 'VALIDATION_ERROR')
+      expectError(response, StatusCodes.BAD_REQUEST, 'VALIDATION_FAILED')
     })
 
     it('should return 400 for username too short', async () => {
@@ -110,7 +109,7 @@ describe('Auth API', () => {
         password: 'Password@123',
       })
 
-      expectError(response, 400, 'VALIDATION_ERROR')
+      expectError(response, StatusCodes.BAD_REQUEST, 'VALIDATION_FAILED')
     })
 
     it('should return 400 for username too long', async () => {
@@ -122,7 +121,7 @@ describe('Auth API', () => {
           password: 'Password@123',
         })
 
-      expectError(response, 400, 'VALIDATION_ERROR')
+      expectError(response, StatusCodes.BAD_REQUEST, 'VALIDATION_FAILED')
     })
 
     it('should return 400 for invalid username format', async () => {
@@ -132,7 +131,7 @@ describe('Auth API', () => {
         password: 'Password@123',
       })
 
-      expectError(response, 400, 'VALIDATION_ERROR')
+      expectError(response, StatusCodes.BAD_REQUEST, 'VALIDATION_FAILED')
     })
 
     it('should return 400 for missing password', async () => {
@@ -141,7 +140,7 @@ describe('Auth API', () => {
         email: generateEmail(),
       })
 
-      expectError(response, 400, 'VALIDATION_ERROR')
+      expectError(response, StatusCodes.BAD_REQUEST, 'VALIDATION_FAILED')
     })
 
     it('should return 400 for weak password', async () => {
@@ -151,7 +150,7 @@ describe('Auth API', () => {
         password: 'weakpass',
       })
 
-      expectError(response, 400, 'VALIDATION_ERROR')
+      expectError(response, StatusCodes.BAD_REQUEST, 'VALIDATION_FAILED')
     })
 
     it('should return 400 for password without uppercase', async () => {
@@ -161,7 +160,7 @@ describe('Auth API', () => {
         password: 'password@123',
       })
 
-      expectError(response, 400, 'VALIDATION_ERROR')
+      expectError(response, StatusCodes.BAD_REQUEST, 'VALIDATION_FAILED')
     })
 
     it('should return 400 for password without special character', async () => {
@@ -171,7 +170,7 @@ describe('Auth API', () => {
         password: 'Password123',
       })
 
-      expectError(response, 400, 'VALIDATION_ERROR')
+      expectError(response, StatusCodes.BAD_REQUEST, 'VALIDATION_FAILED')
     })
   })
 
@@ -184,7 +183,7 @@ describe('Auth API', () => {
         password: 'Password@123',
       })
 
-      expectSuccess(response, 200, 'User logged in successfully')
+      expectSuccess(response, StatusCodes.OK, 'User logged in successfully')
       expect(response.body.data.user).toBeDefined()
       expect(response.body.data.user.id).toBe(user._id.toString())
       expect(response.body.data.accessToken).toBeDefined()
@@ -199,7 +198,7 @@ describe('Auth API', () => {
         password: 'Password@123',
       })
 
-      expectSuccess(response, 200, 'User logged in successfully')
+      expectSuccess(response, StatusCodes.OK, 'User logged in successfully')
       expect(response.body.data.user.id).toBe(user._id.toString())
     })
 
@@ -209,8 +208,8 @@ describe('Auth API', () => {
         password: 'Password@123',
       })
 
-      expectError(response, 401, 'AUTHENTICATION_ERROR')
-      expect(response.body.error.message).toBe('Invalid credentials')
+      expectError(response, StatusCodes.UNAUTHORIZED, 'INVALID_CREDENTIALS')
+      expect(response.body.error.message).toBe('Invalid email/username or password')
     })
 
     it('should return 401 for invalid password', async () => {
@@ -221,7 +220,7 @@ describe('Auth API', () => {
         password: 'WrongPassword@123',
       })
 
-      expectError(response, 401, 'AUTHENTICATION_ERROR')
+      expectError(response, StatusCodes.UNAUTHORIZED, 'INVALID_CREDENTIALS')
     })
 
     it('should return 400 when both username and email are missing', async () => {
@@ -229,7 +228,7 @@ describe('Auth API', () => {
         password: 'Password@123',
       })
 
-      expectError(response, 400, 'VALIDATION_ERROR')
+      expectError(response, StatusCodes.BAD_REQUEST, 'VALIDATION_FAILED')
     })
 
     it('should return 400 for missing password', async () => {
@@ -237,7 +236,7 @@ describe('Auth API', () => {
         username: 'testuser',
       })
 
-      expectError(response, 400, 'VALIDATION_ERROR')
+      expectError(response, StatusCodes.BAD_REQUEST, 'VALIDATION_FAILED')
     })
 
     it('should store refresh token in database', async () => {
@@ -248,7 +247,7 @@ describe('Auth API', () => {
         password: 'Password@123',
       })
 
-      expectSuccess(response, 200)
+      expectSuccess(response, StatusCodes.OK)
 
       const tokenDoc = await RefreshToken.findOne({
         user: user._id,
@@ -266,9 +265,10 @@ describe('Auth API', () => {
       const response = await request(app)
         .post('/api/v1/auth/logout')
         .set('Authorization', `Bearer ${tokens.accessToken}`)
+        .type('form')
         .send({ refresh_token: tokens.refreshToken })
 
-      expectSuccess(response, 200, 'User logged out successfully')
+      expectSuccess(response, StatusCodes.OK, 'User logged out successfully')
 
       // Verify refresh token is removed from database
       const tokenDoc = await RefreshToken.findOne({
@@ -285,9 +285,8 @@ describe('Auth API', () => {
       const response = await request(app)
         .post('/api/v1/auth/logout')
         .set('Authorization', `Bearer ${tokens.accessToken}`)
-        .send({})
 
-      expectError(response, 400, 'VALIDATION_ERROR')
+      expectError(response, StatusCodes.BAD_REQUEST, 'VALIDATION_FAILED')
     })
 
     it('should return 401 for invalid refresh token', async () => {
@@ -296,31 +295,36 @@ describe('Auth API', () => {
       const response = await request(app)
         .post('/api/v1/auth/logout')
         .set('Authorization', `Bearer ${tokens.accessToken}`)
+        .type('form')
         .send({ refresh_token: 'invalid_refresh_token' })
 
-      expectError(response, 401, 'AUTHENTICATION_ERROR')
+      expectError(response, StatusCodes.UNAUTHORIZED, 'INVALID_TOKEN')
     })
 
-    it('should return 400 for missing access token', async () => {
+    it('should return 401 for missing access token', async () => {
       const { tokens } = await createTestUser()
 
       const response = await request(app)
         .post('/api/v1/auth/logout')
+        .type('form')
         .send({ refresh_token: tokens.refreshToken })
 
-      expectError(response, 400, 'VALIDATION_ERROR')
+      expectError(response, StatusCodes.UNAUTHORIZED, 'MISSING_TOKEN')
     })
   })
 
-  describe('POST /api/v1/auth/refresh-token', () => {
+  describe('POST /api/v1/auth/refresh', () => {
     it('should refresh tokens successfully', async () => {
       const { user, tokens } = await createTestUser()
 
+      await new Promise((resolve) => setTimeout(resolve, 1000))
+
       const response = await request(app)
-        .post('/api/v1/auth/refresh-token')
+        .post('/api/v1/auth/refresh')
+        .type('form')
         .send({ refresh_token: tokens.refreshToken })
 
-      expectSuccess(response, 200, 'Tokens refreshed successfully')
+      expectSuccess(response, StatusCodes.OK, 'Tokens refreshed successfully')
       expect(response.body.data.accessToken).toBeDefined()
       expect(response.body.data.refreshToken).toBeDefined()
       expect(response.body.data.accessToken).not.toBe(tokens.accessToken)
@@ -342,17 +346,18 @@ describe('Auth API', () => {
     })
 
     it('should return 400 for missing refresh token', async () => {
-      const response = await request(app).post('/api/v1/auth/refresh-token').send({})
+      const response = await request(app).post('/api/v1/auth/refresh')
 
-      expectError(response, 400, 'VALIDATION_ERROR')
+      expectError(response, StatusCodes.BAD_REQUEST, 'VALIDATION_FAILED')
     })
 
     it('should return 401 for invalid refresh token', async () => {
       const response = await request(app)
-        .post('/api/v1/auth/refresh-token')
+        .post('/api/v1/auth/refresh')
+        .type('form')
         .send({ refresh_token: 'invalid_token' })
 
-      expectError(response, 401, 'AUTHENTICATION_ERROR')
+      expectError(response, StatusCodes.UNAUTHORIZED, 'INVALID_TOKEN')
     })
 
     it('should return 401 for non-existent refresh token', async () => {
@@ -362,10 +367,11 @@ describe('Auth API', () => {
       await RefreshToken.deleteMany({})
 
       const response = await request(app)
-        .post('/api/v1/auth/refresh-token')
+        .post('/api/v1/auth/refresh')
+        .type('form')
         .send({ refresh_token: tokens.refreshToken })
 
-      expectError(response, 401, 'AUTHENTICATION_ERROR')
+      expectError(response, StatusCodes.UNAUTHORIZED, 'REFRESH_TOKEN_REVOKED')
     })
   })
 })

@@ -1,19 +1,28 @@
-const { errors, jwt } = require('@utils')
+const {
+  jwt: { verifyToken },
+} = require('@utils')
 const { refreshTokenRepository } = require('@repositories')
-const { env } = require('@config')
+const { env, logger } = require('@config')
+const { AuthenticationError } = require('@errors')
 
 /**
  * Verify access token middleware
  */
 exports.accessToken = (req, res, next) => {
   const authHeader = req.headers['authorization']
-  const token = authHeader?.split(' ')[1]
+  const regex = /^Bearer\s+[A-Za-z0-9-_=]+\.[A-Za-z0-9-_=]+\.?[A-Za-z0-9-_.+/=]*$/
 
-  if (!token) {
-    throw new errors.ValidationError('Authorization token missing or malformed')
+  if (!authHeader) {
+    throw new AuthenticationError('Authorization token missing', 'MISSING_TOKEN')
   }
 
-  const payload = jwt.verifyToken(token, env.JWT_SECRET)
+  if (!regex.test(authHeader)) {
+    throw new AuthenticationError('Authorization token is malformed', 'INVALID_TOKEN')
+  }
+
+  const token = authHeader.split(/\s+/)[1]
+
+  const payload = verifyToken(token, env.JWT_SECRET)
   req.user = payload
   next()
 }
@@ -24,11 +33,7 @@ exports.accessToken = (req, res, next) => {
 exports.refreshToken = async (req, res, next) => {
   const { refresh_token } = req.body
 
-  if (!refresh_token) {
-    throw new errors.ValidationError('refresh_token is required')
-  }
-
-  const user = jwt.verifyToken(refresh_token, env.JWT_REFRESH_SECRET)
+  const user = verifyToken(refresh_token, env.JWT_REFRESH_SECRET)
 
   const tokenDoc = await refreshTokenRepository.exists({
     user: user.id,
@@ -36,7 +41,13 @@ exports.refreshToken = async (req, res, next) => {
   })
 
   if (!tokenDoc) {
-    throw new errors.AuthError('Invalid refresh token')
+    logger.warn('Refresh token not found in database - potential reuse attempt', {
+      userId: user.id,
+    })
+    throw new AuthenticationError(
+      'Your session has expired. Please log in again.',
+      'REFRESH_TOKEN_REVOKED'
+    )
   }
 
   req.user = user

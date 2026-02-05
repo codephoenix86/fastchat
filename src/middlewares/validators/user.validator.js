@@ -1,95 +1,133 @@
-const { body } = require('express-validator')
+const { body, oneOf } = require('express-validator')
 
-const { errors } = require('@utils')
+const { message } = require('@utils')
 const { VALIDATION } = require('@constants')
 
 exports.update = [
-  body().custom((body) => {
-    const allowedFields = ['newUsername', 'newEmail', 'newPassword', 'newBio', 'oldPassword']
-    const providedFields = Object.keys(body).filter(key => allowedFields.includes(key))
-    
-    // Remove oldPassword from count since it's just for verification
-    const updateFields = providedFields.filter(key => key !== 'oldPassword')
-    
-    if (updateFields.length === 0) {
-      throw new errors.ValidationError('At least one field is required to update')
+  oneOf(
+    [
+      body('newUsername').exists(),
+      body('newEmail').exists(),
+      body('newPassword').exists(),
+      body('newBio').exists(),
+    ],
+    {
+      message: message(
+        'At least one field is required to update',
+        'MISSING_PAYLOAD',
+        'newUsername_newEmail_newPassword_newBio'
+      ),
     }
-    return true
-  }),
-  body().custom((body, { req }) => {
-    if (body.newPassword && !body.oldPassword) {
-      throw new errors.ValidationError('Old password is required to change password')
-    }
-    if (body.newEmail && !body.oldPassword) {
-      throw new errors.ValidationError('Old password is required to change email')
-    }
-    return true
-  }),
-
+  ),
+  body('oldPassword')
+    .if((value, { req }) => req.body.newPassword || req.body.newEmail)
+    .exists()
+    .withMessage(
+      message(
+        'Old password is required to change password or email',
+        'REQUIRED_FIELD',
+        'oldPassword'
+      )
+    )
+    .bail()
+    .isString()
+    .withMessage(message('Old password must be a valid string', 'TYPE_MISMATCH', 'string')),
   body('newUsername')
     .optional()
     .isString()
-    .withMessage('Username must be a string')
-    .trim()
+    .withMessage(message('New username must be a valid string', 'TYPE_MISMATCH', 'string'))
     .bail()
+    .trim()
     .isLength({
       min: VALIDATION.USERNAME.MIN_LENGTH,
       max: VALIDATION.USERNAME.MAX_LENGTH,
     })
     .withMessage(
-      `Username must be ${VALIDATION.USERNAME.MIN_LENGTH}-${VALIDATION.USERNAME.MAX_LENGTH} characters long`
+      message(
+        `New username must be ${VALIDATION.USERNAME.MIN_LENGTH}-${VALIDATION.USERNAME.MAX_LENGTH} characters long`,
+        'OUT_OF_RANGE',
+        `${VALIDATION.USERNAME.MIN_LENGTH}-${VALIDATION.USERNAME.MAX_LENGTH}_chars`
+      )
     )
     .bail()
     .matches(VALIDATION.USERNAME.REGEX)
     .withMessage(
-      'Username must start with a letter and can only contain letters, digits, underscores, and dots'
+      message(
+        'New username must start with a letter and can only contain letters, digits, underscores, and dots',
+        'INVALID_FORMAT',
+        'alphanumeric_start_with_letter'
+      )
     ),
 
   body('newEmail')
     .optional()
+    .normalizeEmail()
     .isEmail()
-    .withMessage('Invalid email address')
-    .normalizeEmail(),
+    .withMessage(message('Invalid email address', 'INVALID_FORMAT', 'email_pattern')),
 
   body('newPassword')
     .optional()
     .isLength({ min: VALIDATION.PASSWORD.MIN_LENGTH })
-    .withMessage(`Password must be at least ${VALIDATION.PASSWORD.MIN_LENGTH} characters long`)
+    .withMessage(
+      message(
+        `New password must be at least ${VALIDATION.PASSWORD.MIN_LENGTH} characters long`,
+        'TOO_SHORT',
+        `min:${VALIDATION.PASSWORD.MIN_LENGTH}_chars`
+      )
+    )
     .bail()
     .matches(VALIDATION.PASSWORD.REGEX)
     .withMessage(
-      'Password must contain at least one lowercase letter, one uppercase letter, one digit, and one special character'
+      message(
+        'New password must contain at least one lowercase letter, one uppercase letter, one digit, and one special character',
+        'WEAK_PASSWORD',
+        'strong_password_pattern'
+      )
     ),
 
   body('newBio')
     .optional()
     .isString()
-    .withMessage('Bio must be a string')
+    .withMessage(message('Bio must be a valid string', 'REQUIRED_FIELD', 'newBio'))
+    .bail()
     .trim()
     .isLength({ max: VALIDATION.BIO.MAX_LENGTH })
-    .withMessage(`Bio must not exceed ${VALIDATION.BIO.MAX_LENGTH} characters`),
-
-  body('oldPassword')
-    .optional()
-    .isString()
-    .withMessage('Old password must be a string'),
+    .withMessage(
+      message(
+        `Bio must not exceed ${VALIDATION.BIO.MAX_LENGTH} characters`,
+        'TOO_LONG',
+        `max:${VALIDATION.BIO.MAX_LENGTH}_chars`
+      )
+    ),
 ]
 
 exports.changePassword = [
   body('oldPassword')
     .exists()
-    .withMessage('Old password is required')
+    .withMessage(message('Old password is required', 'REQUIRED_FIELD', 'oldPassword'))
+    .bail()
     .isString()
-    .withMessage('Old password must be a string'),
+    .withMessage(message('Old password must be a valid string', 'TYPE_MISMATCH', 'string')),
 
   body('newPassword')
     .exists()
-    .withMessage('New password is required')
+    .withMessage(message('New password is required', 'REQUIRED_FIELD', 'newPassword'))
+    .bail()
     .isLength({ min: VALIDATION.PASSWORD.MIN_LENGTH })
-    .withMessage(`Password must be at least ${VALIDATION.PASSWORD.MIN_LENGTH} characters long`)
+    .withMessage(
+      message(
+        `Password must be at least ${VALIDATION.PASSWORD.MIN_LENGTH} characters long`,
+        'TOO_SHORT',
+        `min:${VALIDATION.PASSWORD.MIN_LENGTH}_chars`
+      )
+    )
     .bail()
     .matches(VALIDATION.PASSWORD.REGEX)
     .withMessage(
-      'Password must contain at least one lowercase letter, one uppercase letter, one digit, and one special character'
+      message(
+        'Password must contain at least one lowercase letter, one uppercase letter, one digit, and one special character',
+        'WEAK_PASSWORD',
+        'strong_password_pattern'
+      )
     ),
 ]

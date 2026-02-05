@@ -13,7 +13,7 @@ jest.mock('fs', () => ({
 const fs = require('fs').promises
 const bcrypt = require('bcrypt')
 const userService = require('@services/user.service')
-const { NotFoundError, ConflictError, AuthError } = require('@errors/errors')
+const { NotFoundError, ConflictError, AuthenticationError } = require('@errors')
 const { createMockUser, createObjectId } = require('@tests/unit/helpers')
 const { userRepository } = require('@repositories')
 
@@ -47,7 +47,9 @@ describe('UserService', () => {
       userRepository.create.mockRejectedValue(error)
 
       await expect(userService.createUser(userData)).rejects.toThrow(ConflictError)
-      await expect(userService.createUser(userData)).rejects.toThrow('Email already exists')
+      await expect(userService.createUser(userData)).rejects.toThrow(
+        'This email address is already registered. Please log in instead.'
+      )
     })
 
     it('should throw ConflictError for duplicate username', async () => {
@@ -57,7 +59,9 @@ describe('UserService', () => {
       userRepository.create.mockRejectedValue(error)
 
       await expect(userService.createUser(userData)).rejects.toThrow(ConflictError)
-      await expect(userService.createUser(userData)).rejects.toThrow('Username already taken')
+      await expect(userService.createUser(userData)).rejects.toThrow(
+        'That username is already taken. Please try another one.'
+      )
     })
   })
 
@@ -158,7 +162,7 @@ describe('UserService', () => {
 
       await expect(
         userService.updateUser(userId, { email: 'new@example.com' }, 'wrong')
-      ).rejects.toThrow(AuthError)
+      ).rejects.toThrow(AuthenticationError)
     })
 
     it('should throw NotFoundError when user does not exist', async () => {
@@ -256,7 +260,7 @@ describe('UserService', () => {
       bcrypt.compare.mockResolvedValue(false)
 
       await expect(userService.changePassword(mockUser._id, 'wrong', 'new')).rejects.toThrow(
-        AuthError
+        AuthenticationError
       )
     })
   })

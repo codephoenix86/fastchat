@@ -1,14 +1,14 @@
 const {
   AppError,
   ValidationError,
-  AuthError,
+  AuthenticationError,
   NotFoundError,
   AuthorizationError,
   ConflictError,
   RateLimitError,
   PayloadTooLargeError,
-} = require('@errors/errors')
-const { HTTP_STATUS } = require('@constants')
+} = require('@errors')
+const { StatusCodes } = require('http-status-codes')
 
 describe('Error Classes', () => {
   describe('AppError', () => {
@@ -16,8 +16,8 @@ describe('Error Classes', () => {
       const error = new AppError('Test error', 500)
 
       expect(error.message).toBe('Test error')
-      expect(error.status).toBe(500)
-      expect(error.operational).toBe(true)
+      expect(error.statusCode).toBe(500)
+      expect(error.isOperational).toBe(true)
       expect(error.timestamp).toBeDefined()
     })
 
@@ -32,12 +32,6 @@ describe('Error Classes', () => {
 
       expect(error.stack).toBeDefined()
     })
-
-    it('should allow setting operational to false', () => {
-      const error = new AppError('Test', 500, false)
-
-      expect(error.operational).toBe(false)
-    })
   })
 
   describe('ValidationError', () => {
@@ -45,8 +39,8 @@ describe('Error Classes', () => {
       const error = new ValidationError('Invalid input')
 
       expect(error.message).toBe('Invalid input')
-      expect(error.status).toBe(HTTP_STATUS.BAD_REQUEST)
-      expect(error.name).toBe('VALIDATION_ERROR')
+      expect(error.statusCode).toBe(StatusCodes.BAD_REQUEST)
+      expect(error.code).toBe('BAD_REQUEST')
     })
 
     it('should accept error details array', () => {
@@ -55,21 +49,15 @@ describe('Error Classes', () => {
 
       expect(error.errors).toEqual(details)
     })
-
-    it('should allow custom status code', () => {
-      const error = new ValidationError('Custom validation', undefined, 422)
-
-      expect(error.status).toBe(422)
-    })
   })
 
-  describe('AuthError', () => {
+  describe('AuthenticationError', () => {
     it('should create auth error with 401 status', () => {
-      const error = new AuthError('Unauthorized')
+      const error = new AuthenticationError('Unauthorized')
 
       expect(error.message).toBe('Unauthorized')
-      expect(error.status).toBe(HTTP_STATUS.UNAUTHORIZED)
-      expect(error.name).toBe('AUTHENTICATION_ERROR')
+      expect(error.statusCode).toBe(StatusCodes.UNAUTHORIZED)
+      expect(error.code).toBe('UNAUTHORIZED')
     })
   })
 
@@ -78,14 +66,8 @@ describe('Error Classes', () => {
       const error = new NotFoundError('Resource not found')
 
       expect(error.message).toBe('Resource not found')
-      expect(error.status).toBe(HTTP_STATUS.NOT_FOUND)
-      expect(error.name).toBe('NOT_FOUND')
-    })
-
-    it('should allow custom status code', () => {
-      const error = new NotFoundError('Not found', 410)
-
-      expect(error.status).toBe(410)
+      expect(error.statusCode).toBe(StatusCodes.NOT_FOUND)
+      expect(error.code).toBe('NOT_FOUND')
     })
   })
 
@@ -94,8 +76,8 @@ describe('Error Classes', () => {
       const error = new AuthorizationError('Forbidden')
 
       expect(error.message).toBe('Forbidden')
-      expect(error.status).toBe(HTTP_STATUS.FORBIDDEN)
-      expect(error.name).toBe('FORBIDDEN')
+      expect(error.statusCode).toBe(StatusCodes.FORBIDDEN)
+      expect(error.code).toBe('FORBIDDEN')
     })
   })
 
@@ -104,8 +86,8 @@ describe('Error Classes', () => {
       const error = new ConflictError('Resource already exists')
 
       expect(error.message).toBe('Resource already exists')
-      expect(error.status).toBe(HTTP_STATUS.CONFLICT)
-      expect(error.name).toBe('CONFLICT')
+      expect(error.statusCode).toBe(StatusCodes.CONFLICT)
+      expect(error.code).toBe('CONFLICT')
     })
   })
 
@@ -113,9 +95,9 @@ describe('Error Classes', () => {
     it('should create rate limit error with 429 status', () => {
       const error = new RateLimitError()
 
-      expect(error.message).toBe('Too many requests')
-      expect(error.status).toBe(HTTP_STATUS.TOO_MANY_REQUESTS)
-      expect(error.name).toBe('RATE_LIMIT_EXCEEDED')
+      expect(error.message).toBe('Too many requests, please try again later')
+      expect(error.statusCode).toBe(StatusCodes.TOO_MANY_REQUESTS)
+      expect(error.code).toBe('TOO_MANY_REQUESTS')
     })
 
     it('should accept custom message', () => {
@@ -129,9 +111,9 @@ describe('Error Classes', () => {
     it('should create payload too large error with 413 status', () => {
       const error = new PayloadTooLargeError()
 
-      expect(error.message).toBe('File too large')
-      expect(error.status).toBe(HTTP_STATUS.PAYLOAD_TOO_LARGE)
-      expect(error.name).toBe('PAYLOAD_TOO_LARGE')
+      expect(error.message).toBe('File size is too large')
+      expect(error.statusCode).toBe(StatusCodes.REQUEST_TOO_LONG)
+      expect(error.code).toBe('PAYLOAD_TOO_LARGE')
     })
 
     it('should accept custom message', () => {

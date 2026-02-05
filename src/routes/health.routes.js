@@ -5,7 +5,7 @@ const { HTTP_STATUS } = require('@constants')
 
 const router = express.Router()
 
-router.get('/', async (req, res) => {
+router.get('/', (req, res) => {
   const health = {
     uptime: process.uptime(),
     timestamp: Date.now(),
@@ -31,7 +31,7 @@ router.get('/', async (req, res) => {
     logger.error('Health check error:', {
       error: err.message,
       stack: err.stack,
-      name: err.name
+      name: err.name,
     })
     health.checks.database = 'error'
     health.status = 'DEGRADED'

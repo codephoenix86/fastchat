@@ -1,5 +1,5 @@
 const chatService = require('@services/chat.service')
-const { ValidationError, NotFoundError, AuthorizationError } = require('@errors/errors')
+const { ConflictError, NotFoundError, AuthorizationError } = require('@errors')
 const { createMockChat, createObjectId } = require('@tests/unit/helpers')
 const { CHAT_TYPES } = require('@constants')
 
@@ -32,7 +32,6 @@ describe('ChatService', () => {
         userId1
       )
 
-      expect(userRepository.countDocuments).toHaveBeenCalled()
       expect(chatRepository.create).toHaveBeenCalled()
       expect(result.type).toBe(CHAT_TYPES.PRIVATE)
     })
@@ -65,20 +64,6 @@ describe('ChatService', () => {
           groupName: 'Test Group',
         })
       )
-    })
-
-    it('should throw ValidationError when participants do not exist', async () => {
-      userRepository.countDocuments.mockResolvedValue(1)
-
-      await expect(
-        chatService.createChat(
-          {
-            participants: [createObjectId(), createObjectId()],
-            type: CHAT_TYPES.PRIVATE,
-          },
-          createObjectId()
-        )
-      ).rejects.toThrow(ValidationError)
     })
 
     it('should add creator to participants automatically', async () => {
@@ -194,13 +179,6 @@ describe('ChatService', () => {
       expect(result.name).toBe('Updated Name')
     })
 
-    it('should throw ValidationError for private chat', async () => {
-      const mockChat = createMockChat({ type: CHAT_TYPES.PRIVATE })
-      chatRepository.findById.mockResolvedValue(mockChat)
-
-      await expect(chatService.updateChat('chatId', 'userId', {})).rejects.toThrow(ValidationError)
-    })
-
     it('should throw AuthorizationError when non-admin tries to update', async () => {
       const adminId = createObjectId()
       const nonAdminId = createObjectId()
@@ -231,13 +209,6 @@ describe('ChatService', () => {
       await chatService.deleteChat(mockChat._id, adminId.toString())
 
       expect(chatRepository.findByIdAndDelete).toHaveBeenCalledWith(mockChat._id)
-    })
-
-    it('should throw ValidationError for private chat', async () => {
-      const mockChat = createMockChat({ type: CHAT_TYPES.PRIVATE })
-      chatRepository.findById.mockResolvedValue(mockChat)
-
-      await expect(chatService.deleteChat('chatId', 'userId')).rejects.toThrow(ValidationError)
     })
   })
 
@@ -279,7 +250,7 @@ describe('ChatService', () => {
       expect(chatRepository.findByIdAndUpdate).toHaveBeenCalled()
     })
 
-    it('should throw ValidationError when member already exists', async () => {
+    it('should throw ConflictError when member already exists', async () => {
       const adminId = createObjectId()
       const existingMemberId = createObjectId()
       const mockChat = createMockChat({
@@ -292,7 +263,7 @@ describe('ChatService', () => {
 
       await expect(
         chatService.addMember('chatId', adminId.toString(), existingMemberId.toString())
-      ).rejects.toThrow(ValidationError)
+      ).rejects.toThrow(ConflictError)
     })
   })
 
@@ -328,7 +299,7 @@ describe('ChatService', () => {
       expect(chatRepository.findByIdAndDelete).toHaveBeenCalled()
     })
 
-    it('should throw AuthorizationError when admin tries to leave without transfer', async () => {
+    it('should throw ConflictError when admin tries to leave without transfer', async () => {
       const adminId = createObjectId()
       const mockChat = createMockChat({
         type: CHAT_TYPES.GROUP,
@@ -340,7 +311,7 @@ describe('ChatService', () => {
 
       await expect(
         chatService.removeMember('chatId', adminId.toString(), adminId.toString())
-      ).rejects.toThrow(AuthorizationError)
+      ).rejects.toThrow(ConflictError)
     })
   })
 })

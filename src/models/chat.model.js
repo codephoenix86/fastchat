@@ -21,9 +21,15 @@ const schema = new mongoose.Schema(
       required: true,
       validate: {
         validator: function (value) {
-          if (!Array.isArray(value)) return false
-          if (this.type === CHAT_TYPES.GROUP) return value.length >= 2
-          if (this.type === CHAT_TYPES.PRIVATE) return value.length === 2
+          if (!Array.isArray(value)) {
+            return false
+          }
+          if (this.type === CHAT_TYPES.GROUP) {
+            return value.length >= 2
+          }
+          if (this.type === CHAT_TYPES.PRIVATE) {
+            return value.length === 2
+          }
           return false
         },
         message: 'Participants must be an array with valid number of users',
