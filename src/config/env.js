@@ -6,17 +6,18 @@ const env = cleanEnv(process.env, {
     default: 'development',
   }),
   PORT: port({ default: 3000 }),
-  MONGO_URI: url(),
-  JWT_SECRET: str({ minLength: 32 }),
-  JWT_REFRESH_SECRET: str({ minLength: 32 }),
-  JWT_ACCESS_EXPIRES: str({ default: '15m' }),
-  JWT_REFRESH_EXPIRES: str({ default: '7d' }),
+  MONGODB_URI: url(),
+  POSTGRES_URI: url(),
+  REDIS_URI: url(),
+  ACCESS_TOKEN_SECRET: str({ minLength: 32 }),
+  ACCESS_TOKEN_TTL: str({ default: '15m' }),
+  REFRESH_TOKEN_TTL: str({ default: '7d' }),
   ALLOWED_ORIGINS: str({ default: 'http://localhost:3000' }),
   LOG_LEVEL: str({
     choices: ['error', 'warn', 'info', 'debug'],
     default: 'info',
   }),
-  MAX_FILE_SIZE: num({ default: 5242880 }), // 5MB
+  MAX_FILE_SIZE: num({ default: 5242880 }),
 })
 
 module.exports = env

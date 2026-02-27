@@ -1,30 +1,29 @@
 const express = require('express')
 
-const { auth, validators, validate } = require('@middlewares')
+const { protect, validate, limitRate } = require('@middlewares')
+const { authSchema } = require('@schemas')
 const { authControllers } = require('@controllers')
 const { asyncHandler } = require('@utils')
 
 const router = express.Router()
 
-router.post('/signup', validators.auth.signup, validate, asyncHandler(authControllers.signup))
+router.use(limitRate(15 * 60 * 1000, 5, 'auth'))
 
-router.post('/login', validators.auth.login, validate, asyncHandler(authControllers.login))
+router.post('/signup', validate(authSchema.signup), asyncHandler(authControllers.signup))
+router.post('/login', validate(authSchema.login), asyncHandler(authControllers.login))
 
 router.post(
   '/logout',
-  validators.auth.logout,
-  validate,
-  asyncHandler(auth.accessToken),
-  asyncHandler(auth.refreshToken),
+  validate(authSchema.logout),
+  asyncHandler(protect.refreshToken),
   asyncHandler(authControllers.logout)
 )
 
 router.post(
   '/refresh',
-  validators.auth.refreshToken,
-  validate,
-  asyncHandler(auth.refreshToken),
-  asyncHandler(authControllers.refreshToken)
+  validate(authSchema.refreshToken),
+  asyncHandler(protect.refreshToken),
+  asyncHandler(authControllers.refreshSession)
 )
 
 module.exports = router

@@ -1,113 +1,80 @@
 require('module-alias/register')
 const http = require('http')
-
 const app = require('@/app')
-const {
-  logger,
-  env,
-  db: { connectDB, disconnectDB },
-} = require('@config')
-const { socketServer } = require('@sockets')
-
+const { logger, env, redis, postgres } = require('@config')
+const pool = postgres.getPool()
+const client = redis.getClient()
+const { init } = require('@sockets')
+const mongoose = require('mongoose')
 const server = http.createServer(app)
-const io = socketServer.init(server)
+const io = init(server)
 
-// Track shutdown state to prevent multiple shutdown attempts
-let isShuttingDown = false
-
-// Graceful shutdown handler
-const gracefulShutdown = async (signal) => {
-  if (isShuttingDown) {
-    logger.warn('Shutdown already in progress, ignoring signal')
-    return
-  }
-
-  isShuttingDown = true
-  logger.info(`${signal} received, starting graceful shutdown`)
-
-  // Set a force shutdown timeout (but don't keep process alive)
-  setTimeout(() => {
-    logger.error('Forced shutdown after timeout')
-    // eslint-disable-next-line no-process-exit
-    process.exit(1)
-  }, 10000)
-
+const startServer = async () => {
   try {
-    // Stop accepting new HTTP connections
-    await new Promise((resolve, reject) => {
-      server.close((err) => {
-        if (err) {
-          reject(err)
-        } else {
-          resolve()
-        }
-      })
+    await Promise.all([mongoose.connect(env.MONGODB_URI), client.ping(), pool.query('SELECT 1')])
+    logger.info('All databases connected')
+    server.listen(env.PORT, () => {
+      logger.info(`Server listening on port ${env.PORT}`)
     })
-    logger.info('HTTP server closed')
-
-    // Close Socket.io connections
-    await new Promise((resolve) => {
-      io.close(() => {
-        logger.info('Socket.io server closed')
-        resolve()
-      })
-    })
-
-    // Close database connection
-    await disconnectDB()
-
-    logger.info('Graceful shutdown completed')
-    // eslint-disable-next-line no-process-exit
-    process.exit(0)
   } catch (err) {
-    logger.error('Error during shutdown:', {
-      error: err.message,
-      stack: err.stack,
-      name: err.name,
-    })
-    // eslint-disable-next-line no-process-exit
+    logger.error('Startup failed', err)
+    /* eslint-disable no-process-exit */
     process.exit(1)
   }
 }
 
-// Start server
-;(async () => {
+startServer()
+
+let isShuttingDown = false
+
+const shutdown = async (signal) => {
+  if (isShuttingDown) {
+    logger.warn(`Shutdown already in progress. Ignoring ${signal}.`)
+    return
+  }
+  isShuttingDown = true
+  logger.info(`${signal} received. Starting graceful shutdown...`)
+  const forceExit = setTimeout(() => {
+    logger.error('Graceful shutdown timeout exceeded. Forcing exit...')
+    /* eslint-disable no-process-exit */
+    process.exit(1)
+  }, 10000)
+  forceExit.unref()
+
   try {
-    // Connect to database
-    await connectDB()
-
-    // Start listening
-    server.listen(env.PORT, () => {
-      logger.info(`Server listening on port ${env.PORT}`)
-      logger.info(`Environment: ${env.NODE_ENV}`)
-      logger.info('Application started successfully')
+    logger.info('Closing WebSockets and HTTP server...')
+    await new Promise((resolve) => {
+      if (io) {
+        io.close(resolve)
+      } else {
+        server.close(resolve)
+      }
     })
-
-    // Register shutdown handlers
-    process.on('SIGTERM', () => gracefulShutdown('SIGTERM'))
-    process.on('SIGINT', () => gracefulShutdown('SIGINT'))
-
-    // Handle uncaught errors
-    process.on('uncaughtException', (err) => {
-      logger.error('Uncaught exception:', {
-        error: err.message,
-        stack: err.stack,
-        name: err.name,
-      })
-      gracefulShutdown('uncaughtException')
-    })
-
-    process.on('unhandledRejection', (reason, promise) => {
-      logger.error('Unhandled rejection at:', { reason, promise })
-      gracefulShutdown('unhandledRejection')
-    })
+    logger.info('WebSockets and HTTP server closed.')
+    logger.info('Disconnecting databases...')
+    await Promise.allSettled([mongoose.disconnect(), pool.end(), client.quit()])
+    logger.info('All databases disconnected.')
+    clearTimeout(forceExit)
+    logger.info('Graceful shutdown complete. Exiting.')
+    /* eslint-disable no-process-exit */
+    process.exit(0)
   } catch (err) {
-    logger.error('Failed to start server:', {
-      error: err.message,
-      stack: err.stack,
-      name: err.name,
-    })
-    // eslint-disable-next-line no-process-exit
+    logger.error('Error during graceful shutdown', err)
+    /* eslint-disable no-process-exit */
     process.exit(1)
   }
-})()
+}
+
+process.on('SIGTERM', () => shutdown('SIGTERM'))
+process.on('SIGINT', () => shutdown('SIGINT'))
+
+process.on('uncaughtException', (err) => {
+  logger.error('UNCAUGHT EXCEPTION! App crashing...', err)
+  /* eslint-disable no-process-exit */
+  setTimeout(() => process.exit(1), 1000).unref()
+})
+process.on('unhandledRejection', (reason) => {
+  logger.error('UNHANDLED REJECTION! App crashing...', reason)
+  /* eslint-disable no-process-exit */
+  setTimeout(() => process.exit(1), 1000).unref()
+})

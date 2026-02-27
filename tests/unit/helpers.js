@@ -1,18 +1,12 @@
-const mongoose = require('mongoose')
-
-/**
- * Create a valid MongoDB ObjectId
- */
-exports.createObjectId = () => new mongoose.Types.ObjectId().toString()
-
+const crypto = require('crypto')
 /**
  * Mock user data factory
  */
 exports.createMockUser = (overrides = {}) => ({
-  _id: new mongoose.Types.ObjectId(),
+  id: crypto.randomUUID(),
   username: 'testuser',
   email: 'test@example.com',
-  password: '$2b$10$abcdefghijklmnopqrstuvwxyz', // Hashed password
+  password_hash: '$2b$10$abcdefghijklmnopqrstuvwxyz',
   role: 'user',
   avatar: null,
   bio: 'Test bio',
@@ -26,9 +20,9 @@ exports.createMockUser = (overrides = {}) => ({
  * Mock chat data factory
  */
 exports.createMockChat = (overrides = {}) => ({
-  _id: new mongoose.Types.ObjectId(),
+  _id: crypto.randomUUID(),
   type: 'private',
-  participants: [new mongoose.Types.ObjectId(), new mongoose.Types.ObjectId()],
+  participants: [crypto.randomUUID(), crypto.randomUUID()],
   createdAt: new Date(),
   updatedAt: new Date(),
   ...overrides,
@@ -38,10 +32,10 @@ exports.createMockChat = (overrides = {}) => ({
  * Mock message data factory
  */
 exports.createMockMessage = (overrides = {}) => ({
-  _id: new mongoose.Types.ObjectId(),
+  _id: crypto.randomUUID(),
   content: 'Test message',
-  sender: new mongoose.Types.ObjectId(),
-  chat: new mongoose.Types.ObjectId(),
+  sender: crypto.randomUUID(),
+  chat: crypto.randomUUID(),
   status: 'sent',
   type: 'text',
   createdAt: new Date(),
@@ -53,8 +47,8 @@ exports.createMockMessage = (overrides = {}) => ({
  * Mock refresh token data factory
  */
 exports.createMockRefreshToken = (overrides = {}) => ({
-  _id: new mongoose.Types.ObjectId(),
-  user: new mongoose.Types.ObjectId(),
+  _id: crypto.randomUUID(),
+  user: crypto.randomUUID(),
   refreshToken: 'mock_refresh_token',
   createdAt: new Date(),
   ...overrides,

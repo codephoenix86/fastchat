@@ -4,6 +4,7 @@ jest.mock('bcrypt', () => ({
   hash: jest.fn(),
 }))
 jest.mock('@repositories')
+jest.mock('@config')
 jest.mock('fs', () => ({
   promises: {
     unlink: jest.fn(),
@@ -12,9 +13,10 @@ jest.mock('fs', () => ({
 
 const fs = require('fs').promises
 const bcrypt = require('bcrypt')
+const crypto = require('crypto')
 const userService = require('@services/user.service')
 const { NotFoundError, ConflictError, AuthenticationError } = require('@errors')
-const { createMockUser, createObjectId } = require('@tests/unit/helpers')
+const { createMockUser } = require('@tests/unit/helpers')
 const { userRepository } = require('@repositories')
 
 describe('UserService', () => {
@@ -42,26 +44,23 @@ describe('UserService', () => {
 
     it('should throw ConflictError for duplicate email', async () => {
       const userData = { email: 'existing@example.com' }
-      const error = { code: 11000, keyPattern: { email: 1 } }
-
-      userRepository.create.mockRejectedValue(error)
+      userRepository.create.mockRejectedValue(
+        new ConflictError('Email already exists', 'EMAIL_ALREADY_EXISTS')
+      )
 
       await expect(userService.createUser(userData)).rejects.toThrow(ConflictError)
-      await expect(userService.createUser(userData)).rejects.toThrow(
-        'This email address is already registered. Please log in instead.'
-      )
+      await expect(userService.createUser(userData)).rejects.toThrow('Email already exists')
     })
 
     it('should throw ConflictError for duplicate username', async () => {
       const userData = { username: 'existing' }
-      const error = { code: 11000, keyPattern: { username: 1 } }
 
-      userRepository.create.mockRejectedValue(error)
+      userRepository.create.mockRejectedValue(
+        new ConflictError('Username already taken', 'USERNAME_ALREADY_TAKEN')
+      )
 
       await expect(userService.createUser(userData)).rejects.toThrow(ConflictError)
-      await expect(userService.createUser(userData)).rejects.toThrow(
-        'That username is already taken. Please try another one.'
-      )
+      await expect(userService.createUser(userData)).rejects.toThrow('Username already taken')
     })
   })
 
@@ -87,12 +86,7 @@ describe('UserService', () => {
 
       await userService.findAllUsers({ search: 'test' })
 
-      expect(userRepository.countDocuments).toHaveBeenCalledWith({
-        $or: [
-          { username: { $regex: 'test', $options: 'i' } },
-          { email: { $regex: 'test', $options: 'i' } },
-        ],
-      })
+      expect(userRepository.countDocuments).toHaveBeenCalledWith({}, 'test')
     })
 
     it('should apply custom filters', async () => {
@@ -101,7 +95,7 @@ describe('UserService', () => {
 
       await userService.findAllUsers({ filter: { role: 'admin' } })
 
-      expect(userRepository.countDocuments).toHaveBeenCalledWith({ role: 'admin' })
+      expect(userRepository.countDocuments).toHaveBeenCalledWith({ role: 'admin' }, undefined)
     })
   })
 
@@ -110,10 +104,10 @@ describe('UserService', () => {
       const mockUser = createMockUser()
       userRepository.findById.mockResolvedValue(mockUser)
 
-      const result = await userService.findUserById(mockUser._id)
+      const result = await userService.findUserById(mockUser.id)
 
-      expect(userRepository.findById).toHaveBeenCalledWith(mockUser._id)
-      expect(result.id).toEqual(mockUser._id)
+      expect(userRepository.findById).toHaveBeenCalledWith(mockUser.id)
+      expect(result.id).toEqual(mockUser.id)
     })
 
     it('should throw NotFoundError when user does not exist', async () => {
@@ -125,12 +119,12 @@ describe('UserService', () => {
 
   describe('updateUser', () => {
     it('should update user successfully', async () => {
-      const userId = createObjectId()
+      const userId = crypto.randomUUID()
       const mockUser = createMockUser({ _id: userId, password: 'hashed' })
       const updateData = { username: 'newusername' }
 
-      userRepository.findByIdWithPassword.mockResolvedValue(mockUser)
-      userRepository.findByIdAndUpdate.mockResolvedValue({
+      userRepository.findById.mockResolvedValue(mockUser)
+      userRepository.updateById.mockResolvedValue({
         ...mockUser,
         ...updateData,
       })
@@ -140,33 +134,8 @@ describe('UserService', () => {
       expect(result.username).toBe('newusername')
     })
 
-    it('should verify old password when changing email', async () => {
-      const userId = createObjectId()
-      const mockUser = createMockUser({ password: 'hashed' })
-
-      userRepository.findByIdWithPassword.mockResolvedValue(mockUser)
-      bcrypt.compare.mockResolvedValue(true)
-      userRepository.findByIdAndUpdate.mockResolvedValue(mockUser)
-
-      await userService.updateUser(userId, { email: 'new@example.com' }, 'oldpassword')
-
-      expect(bcrypt.compare).toHaveBeenCalledWith('oldpassword', 'hashed')
-    })
-
-    it('should throw AuthError for incorrect old password', async () => {
-      const userId = createObjectId()
-      const mockUser = createMockUser({ password: 'hashed' })
-
-      userRepository.findByIdWithPassword.mockResolvedValue(mockUser)
-      bcrypt.compare.mockResolvedValue(false)
-
-      await expect(
-        userService.updateUser(userId, { email: 'new@example.com' }, 'wrong')
-      ).rejects.toThrow(AuthenticationError)
-    })
-
     it('should throw NotFoundError when user does not exist', async () => {
-      userRepository.findByIdWithPassword.mockResolvedValue(null)
+      userRepository.findById.mockResolvedValue(null)
 
       await expect(userService.updateUser('nonexistent', {})).rejects.toThrow(NotFoundError)
     })
@@ -212,7 +181,7 @@ describe('UserService', () => {
     it('should update avatar and delete old one', async () => {
       const mockUser = createMockUser({ avatar: 'old.jpg' })
       userRepository.findById.mockResolvedValue(mockUser)
-      userRepository.findByIdAndUpdate.mockResolvedValue({
+      userRepository.updateById.mockResolvedValue({
         ...mockUser,
         avatar: 'new.jpg',
       })
@@ -241,17 +210,18 @@ describe('UserService', () => {
 
   describe('changePassword', () => {
     it('should change password successfully', async () => {
-      const mockUser = createMockUser({ password: 'oldhashed' })
-      mockUser.save = jest.fn()
+      const mockUser = createMockUser({ password_hash: 'oldhashed' })
 
       userRepository.findByIdWithPassword.mockResolvedValue(mockUser)
       bcrypt.compare.mockResolvedValue(true)
+      bcrypt.hash.mockResolvedValue('new_hash')
 
-      await userService.changePassword(mockUser._id, 'oldpass', 'newpass')
+      await userService.changePassword(mockUser.id, 'oldpass', 'newpass')
 
       expect(bcrypt.compare).toHaveBeenCalledWith('oldpass', 'oldhashed')
-      expect(mockUser.password).toBe('newpass')
-      expect(mockUser.save).toHaveBeenCalled()
+      expect(userRepository.updateById).toHaveBeenCalledWith(mockUser.id, {
+        password_hash: 'new_hash',
+      })
     })
 
     it('should throw AuthError for incorrect old password', async () => {

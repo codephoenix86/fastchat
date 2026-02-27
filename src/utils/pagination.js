@@ -9,18 +9,18 @@ exports.parsePaginationParams = (query) => {
   const skip = (page - 1) * limit
 
   // Parse sort: ?sort=-createdAt,username
-  let sort = {}
+  let sort = []
   if (query.sort) {
     query.sort.split(',').forEach((field) => {
       if (field.startsWith('-')) {
-        sort[field.substring(1)] = -1
+        sort.push([field.substring(1), -1])
       } else {
-        sort[field] = 1
+        sort.push([field, 1])
       }
     })
   } else {
     // Default sort by creation date (newest first)
-    sort = { createdAt: -1 }
+    sort = [['created_at', -1]]
   }
 
   return { page, limit, skip, sort }

@@ -6,7 +6,7 @@ const crypto = require('crypto')
 const app = express()
 
 const routes = require('@routes')
-const { errorHandler, sanitize } = require('@middlewares')
+const { handleError, sanitize } = require('@middlewares')
 const { logger, env } = require('@config')
 
 // Security middleware
@@ -73,6 +73,6 @@ app.use((req, res) => {
 })
 
 // Global error handler (must be last)
-app.use(errorHandler)
+app.use(handleError)
 
 module.exports = app

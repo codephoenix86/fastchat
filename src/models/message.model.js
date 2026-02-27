@@ -1,8 +1,13 @@
 const mongoose = require('mongoose')
+const crypto = require('crypto')
 const { MESSAGE_TYPES, MESSAGE_STATUS } = require('@constants')
 
 const schema = new mongoose.Schema(
   {
+    _id: {
+      type: String,
+      default: () => crypto.randomUUID(),
+    },
     content: {
       type: String,
       required: function () {
@@ -16,13 +21,11 @@ const schema = new mongoose.Schema(
       default: MESSAGE_STATUS.SENT,
     },
     sender: {
-      type: mongoose.Schema.Types.ObjectId,
-      ref: 'User',
+      type: String,
       required: true,
     },
     chat: {
-      type: mongoose.Schema.Types.ObjectId,
-      ref: 'Chat',
+      type: String,
       required: true,
     },
     type: {

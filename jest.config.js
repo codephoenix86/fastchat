@@ -55,6 +55,9 @@ module.exports = {
 
     '^@errors$': '<rootDir>/src/errors',
     '^@errors/(.*)$': '<rootDir>/src/errors/$1',
+
+    '^@schemas$': '<rootDir>/src/schemas',
+    '^@schemas/(.*)$': '<rootDir>/src/schemas/$1',
   },
 
   collectCoverageFrom: [

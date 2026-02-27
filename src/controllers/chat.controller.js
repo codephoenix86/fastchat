@@ -33,7 +33,7 @@ exports.getChats = async (req, res) => {
   res.status(StatusCodes.OK).json(new ApiResponse('Chats fetched successfully', paginatedData))
 }
 
-exports.getChat = async (req, res) => {
+exports.getChatById = async (req, res) => {
   const chat = await chatService.getChatById(req.params.chatId, req.user.id)
 
   res.status(StatusCodes.OK).json(new ApiResponse('Chat fetched successfully', { chat }))
@@ -58,17 +58,18 @@ exports.deleteChat = async (req, res) => {
 }
 
 exports.addMember = async (req, res) => {
-  const { userId } = req.body
-
-  await chatService.addMember(req.params.chatId, req.user.id, userId)
+  await chatService.addMember(req.params.chatId, req.user.id, req.params.userId)
 
   res.status(StatusCodes.OK).json(new ApiResponse('Member added successfully'))
 }
 
-exports.removeMember = async (req, res) => {
-  const memberIdToRemove = req.params.userId === 'me' ? req.user.id : req.params.userId
+exports.removeSelf = async (req, res) => {
+  await chatService.removeMember(req.params.chatId, req.user.id, req.user.id)
+  res.status(StatusCodes.OK).json(new ApiResponse('Member removed successfully'))
+}
 
-  await chatService.removeMember(req.params.chatId, req.user.id, memberIdToRemove)
+exports.removeMember = async (req, res) => {
+  await chatService.removeMember(req.params.chatId, req.user.id, req.params.userId)
 
   res.status(StatusCodes.OK).json(new ApiResponse('Member removed successfully'))
 }

@@ -1,8 +1,13 @@
 const mongoose = require('mongoose')
+const crypto = require('crypto')
 const { CHAT_TYPES } = require('@constants')
 
 const schema = new mongoose.Schema(
   {
+    _id: {
+      type: String,
+      default: () => crypto.randomUUID(),
+    },
     type: {
       type: String,
       enum: Object.values(CHAT_TYPES),
@@ -17,7 +22,7 @@ const schema = new mongoose.Schema(
     },
     groupPicture: String,
     participants: {
-      type: [{ type: mongoose.Schema.Types.ObjectId, ref: 'User' }],
+      type: [String],
       required: true,
       validate: {
         validator: function (value) {
@@ -36,8 +41,7 @@ const schema = new mongoose.Schema(
       },
     },
     admin: {
-      type: mongoose.Schema.Types.ObjectId,
-      ref: 'User',
+      type: String,
       required: function () {
         return this.type === CHAT_TYPES.GROUP
       },

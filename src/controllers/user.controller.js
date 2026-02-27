@@ -35,7 +35,7 @@ exports.getUsers = async (req, res) => {
 }
 
 exports.getUserById = async (req, res) => {
-  const user = await userService.findUserById(req.params.id)
+  const user = await userService.findUserById(req.params.userId)
 
   res.status(StatusCodes.OK).json(new ApiResponse('User fetched successfully', { user }))
 }
@@ -47,31 +47,16 @@ exports.getCurrentUser = async (req, res) => {
 }
 
 exports.updateCurrentUser = async (req, res) => {
-  const { newEmail, newUsername, newPassword, newBio, oldPassword } = req.body
+  const { username, bio } = req.body
 
-  const updateData = {}
-  if (newEmail) {
-    updateData.email = newEmail
-  }
-  if (newUsername) {
-    updateData.username = newUsername
-  }
-  if (newPassword) {
-    updateData.password = newPassword
-  }
-  if (newBio !== undefined) {
-    updateData.bio = newBio
-  }
-
-  const user = await userService.updateUser(req.user.id, updateData, oldPassword)
+  const user = await userService.updateUser(req.user.id, { username, bio })
 
   res.status(StatusCodes.OK).json(new ApiResponse('User updated successfully', { user }))
 }
 
 exports.deleteCurrentUser = async (req, res) => {
-  await userService.deleteUser(req.user.id)
-
-  res.status(StatusCodes.OK).json(new ApiResponse('Account deleted successfully'))
+  const deleted = await userService.deleteUser(req.user.id)
+  res.status(StatusCodes.OK).json(new ApiResponse('Account deleted successfully', deleted))
 }
 
 exports.uploadAvatar = async (req, res) => {
@@ -92,9 +77,9 @@ exports.deleteAvatar = async (req, res) => {
 }
 
 exports.changePassword = async (req, res) => {
-  const { oldPassword, newPassword } = req.body
+  const { currentPassword, newPassword } = req.body
 
-  await userService.changePassword(req.user.id, oldPassword, newPassword)
+  await userService.changePassword(req.user.id, currentPassword, newPassword)
 
   res.status(StatusCodes.OK).json(new ApiResponse('Password changed successfully'))
 }

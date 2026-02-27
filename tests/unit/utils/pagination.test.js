@@ -10,7 +10,7 @@ describe('Pagination Utilities', () => {
       expect(result.page).toBe(1)
       expect(result.limit).toBe(20)
       expect(result.skip).toBe(0)
-      expect(result.sort).toEqual({ createdAt: -1 })
+      expect(result.sort).toEqual([['created_at', -1]])
     })
 
     it('should parse page and limit from query', () => {
@@ -59,21 +59,24 @@ describe('Pagination Utilities', () => {
       const query = { sort: 'username' }
       const result = parsePaginationParams(query)
 
-      expect(result.sort).toEqual({ username: 1 })
+      expect(result.sort).toEqual([['username', 1]])
     })
 
     it('should parse sort descending', () => {
-      const query = { sort: '-createdAt' }
+      const query = { sort: '-created_at' }
       const result = parsePaginationParams(query)
 
-      expect(result.sort).toEqual({ createdAt: -1 })
+      expect(result.sort).toEqual([['created_at', -1]])
     })
 
     it('should parse multiple sort fields', () => {
-      const query = { sort: '-createdAt,username' }
+      const query = { sort: '-created_at,username' }
       const result = parsePaginationParams(query)
 
-      expect(result.sort).toEqual({ createdAt: -1, username: 1 })
+      expect(result.sort).toEqual([
+        ['created_at', -1],
+        ['username', 1],
+      ])
     })
 
     it('should handle invalid page gracefully', () => {

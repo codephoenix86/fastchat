@@ -1,77 +1,61 @@
-const { userRepository, refreshTokenRepository } = require('@repositories')
-const {
-  jwt: { generateTokens },
-} = require('@utils')
-const { logger } = require('@config')
-const { verifyCredentials } = require('./auth/credentials')
+const bcrypt = require('bcrypt')
 
-const { AuthenticationError, ConflictError } = require('@errors')
+const userService = require('./user.service')
+const tokenService = require('./token.service')
+const { logger } = require('@config')
+
+const { AuthenticationError } = require('@errors')
 
 class AuthService {
   async signup(userData) {
-    try {
-      const user = await userRepository.create(userData)
+    const { email, username, password } = userData
+    const password_hash = await bcrypt.hash(password, 10)
+    const user = await userService.createUser({ email, username, password_hash })
 
-      logger.info('User registered successfully', {
-        userId: user._id,
-        username: user.username,
-      })
+    logger.info('User registered successfully', {
+      userId: user.id,
+      username: user.username,
+    })
 
-      return {
-        id: user._id,
-        username: user.username,
-        email: user.email,
-        role: user.role,
-      }
-    } catch (err) {
-      logger.error('Signup failed:', {
-        error: err.message,
-        stack: err.stack,
-        name: err.name,
-      })
-      if (err.code === 11000) {
-        if (err.keyPattern.email) {
-          throw new ConflictError(
-            'This email address is already registered. Please log in instead.',
-            'EMAIL_ALREADY_EXISTS'
-          )
-        }
-        if (err.keyPattern.username) {
-          throw new ConflictError(
-            'That username is already taken. Please try another one.',
-            'USERNAME_ALREADY_TAKEN'
-          )
-        }
-      }
-      throw err
+    return {
+      id: user.id,
+      username: user.username,
+      email: user.email,
+      role: user.role,
     }
   }
 
-  async login(credentials) {
-    const user = await verifyCredentials(credentials)
-
-    const payload = {
-      id: user._id.toString(),
-      username: user.username,
-      role: user.role,
+  async authenticate(identifier, password) {
+    const user = await userService.getUserByIdentifier(identifier)
+    if (!user) {
+      logger.warn('Login attempt with invalid credentials', { identifier })
+      throw new AuthenticationError('Invalid email/username or password', 'INVALID_CREDENTIALS')
     }
+    const match = await bcrypt.compare(password, user.password_hash)
+    if (!match) {
+      logger.warn('Login attempt with incorrect password', {
+        userId: user.id,
+      })
+      throw new AuthenticationError('Invalid email/username or password', 'INVALID_CREDENTIALS')
+    }
+    return user
+  }
 
-    const tokens = await generateTokens(payload)
+  async login(credentials) {
+    const { email, username, password } = credentials
+    const identifier = email || username
 
-    // Store refresh token
-    await refreshTokenRepository.create({
-      user: user._id,
-      refreshToken: tokens.refreshToken,
-    })
+    const user = await this.authenticate(identifier, password)
+    const tokens = await tokenService.issueTokenPair(user)
 
     logger.info('User logged in successfully', {
-      userId: user._id,
+      userId: user.id,
       username: user.username,
     })
 
     return {
       user: {
-        id: user._id,
+        id: user.id,
         username: user.username,
         email: user.email,
         role: user.role,
@@ -80,45 +64,17 @@ class AuthService {
     }
   }
 
-  async logout(userId, refreshToken) {
-    const result = await refreshTokenRepository.deleteOne({
-      user: userId,
-      refreshToken,
-    })
-
-    if (result.deletedCount === 0) {
-      throw new AuthenticationError('Session not found or already terminated', 'SESSION_NOT_FOUND')
-    }
-
-    logger.info('User logged out successfully', { userId })
+  async logout(refreshToken) {
+    await tokenService.revokeSession(refreshToken)
+    logger.info('Session terminated successfully')
   }
 
-  async refreshAccessToken(oldRefreshToken, user) {
-    // Verify refresh token exists in database
-    const tokenDoc = await refreshTokenRepository.findOne({
-      user: user.id,
-      refreshToken: oldRefreshToken,
-    })
+  async refreshSession(refreshToken) {
+    const userId = await tokenService.getUserId(refreshToken)
 
-    // Delete old refresh token
-    await refreshTokenRepository.deleteOne({ _id: tokenDoc._id })
+    const user = await userService.findUserById(userId)
 
-    // Generate new tokens
-    const payload = {
-      id: user.id,
-      username: user.username,
-      role: user.role,
-    }
-
-    const tokens = await generateTokens(payload)
-
-    // Store new refresh token
-    await refreshTokenRepository.create({
-      user: user.id,
-      refreshToken: tokens.refreshToken,
-    })
-
-    logger.info('Tokens refreshed successfully', { userId: user.id })
+    const tokens = await tokenService.rotateTokens(refreshToken, user)
 
     return tokens
   }

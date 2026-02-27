@@ -1,76 +1,32 @@
+const { postgres, redis, env } = require('@config')
 const mongoose = require('mongoose')
-const { MongoMemoryServer } = require('mongodb-memory-server')
-const { logger } = require('@config')
 
-let mongoServer = null
-
-/**
- * Connect to in-memory MongoDB before all tests
- */
 const connectTestDB = async () => {
-  try {
-    // Close existing connection if any
-    if (mongoose.connection.readyState !== 0) {
-      await mongoose.connection.close()
-    }
-
-    // Create new in-memory MongoDB instance
-    mongoServer = await MongoMemoryServer.create()
-    const mongoUri = mongoServer.getUri()
-
-    await mongoose.connect(mongoUri, {
-      maxPoolSize: 10,
-      minPoolSize: 2,
-      serverSelectionTimeoutMS: 5000,
-    })
-
-    logger.info('Test database connected (in-memory)')
-    return mongoose.connection
-  } catch (err) {
-    logger.error('Test database connection failed:', err)
-    throw err
-  }
+  const pool = postgres.getPool()
+  const client = redis.getClient()
+  await Promise.all([pool.query('SELECT 1'), client.ping(), mongoose.connect(env.MONGODB_URI)])
+}
+const clearTestDB = async () => {
+  const pool = postgres.getPool()
+  const client = redis.getClient()
+  const statement = `
+    DO $$ DECLARE
+        r RECORD;
+    BEGIN
+        FOR r IN (SELECT tablename FROM pg_tables WHERE schemaname = 'public') LOOP
+            EXECUTE 'TRUNCATE TABLE ' || quote_ident(r.tablename) || ' CASCADE';
+        END LOOP;
+    END $$;
+  `
+  const collections = mongoose.connection.collections
+  const promises = Object.values(collections).map((collection) => collection.deleteMany({}))
+  await Promise.all([...promises, pool.query(statement), client.flushall()])
 }
 
-/**
- * Clear all collections in test database
- */
-const clearDatabase = async () => {
-  try {
-    const collections = mongoose.connection.collections
-
-    await Promise.all(Object.values(collections).map((collection) => collection.deleteMany({})))
-
-    logger.info('Test database cleared')
-  } catch (err) {
-    logger.error('Error clearing database:', err)
-    throw err
-  }
-}
-
-/**
- * Disconnect from test database and stop MongoDB server
- */
 const disconnectTestDB = async () => {
-  try {
-    if (mongoose.connection.readyState !== 0) {
-      await mongoose.connection.close()
-    }
-
-    if (mongoServer) {
-      await mongoServer.stop()
-      mongoServer = null
-    }
-
-    logger.info('Test database disconnected')
-  } catch (err) {
-    logger.error('Error disconnecting from test database:', err)
-    throw err
-  }
+  const pool = postgres.getPool()
+  const client = redis.getClient()
+  await Promise.all([pool.end(), client.disconnect(), mongoose.disconnect()])
 }
 
-module.exports = {
-  connectTestDB,
-  clearDatabase,
-  disconnectTestDB,
-}
+module.exports = { connectTestDB, clearTestDB, disconnectTestDB }

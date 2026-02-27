@@ -89,7 +89,7 @@ class MessageService {
     }
 
     // Only sender can edit message
-    if (message.sender.toString() !== userId) {
+    if (message.sender !== userId) {
       throw new AuthorizationError('Only the author can modify this message', 'NOT_MESSAGE_OWNER')
     }
 
@@ -109,7 +109,7 @@ class MessageService {
     }
 
     // Only sender can delete message
-    if (message.sender.toString() !== userId) {
+    if (message.sender !== userId) {
       throw new AuthorizationError('Only the author can delete this message', 'NOT_MESSAGE_OWNER')
     }
 

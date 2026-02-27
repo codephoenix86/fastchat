@@ -1,14 +1,20 @@
 const request = require('supertest')
 const app = require('@/app')
-const {
-  db: { clearDatabase },
-} = require('@tests/helpers')
+const { connectTestDB, clearTestDB, disconnectTestDB } = require('@tests/helpers')
 const { createTestUser, expectError } = require('./helpers')
 const { StatusCodes } = require('http-status-codes')
 
 describe('Error Handling', () => {
+  beforeAll(async () => {
+    await connectTestDB()
+  })
+
   beforeEach(async () => {
-    await clearDatabase()
+    await clearTestDB()
+  })
+
+  afterAll(async () => {
+    await disconnectTestDB()
   })
 
   describe('404 Not Found', () => {
@@ -28,10 +34,10 @@ describe('Error Handling', () => {
       expect(response.body.success).toBe(false)
     })
 
-    it('should return 404 for non-existent nested route', async () => {
+    it('should return 401 for non-existent and unauthorized nested route', async () => {
       const response = await request(app).get('/api/v1/users/me/invalid')
 
-      expect(response.status).toBe(StatusCodes.NOT_FOUND)
+      expect(response.status).toBe(StatusCodes.UNAUTHORIZED)
       expect(response.body.success).toBe(false)
     })
 
@@ -68,7 +74,7 @@ describe('Error Handling', () => {
       const jwt = require('jsonwebtoken')
       const { env } = require('@config')
 
-      const expiredToken = jwt.sign({ id: 'test' }, env.JWT_SECRET, { expiresIn: '-1h' })
+      const expiredToken = jwt.sign({ id: 'test' }, env.ACCESS_TOKEN_SECRET, { expiresIn: '-1h' })
 
       const response = await request(app)
         .get('/api/v1/users/me')
@@ -119,7 +125,7 @@ describe('Error Handling', () => {
 
       expectError(response, StatusCodes.BAD_REQUEST, 'VALIDATION_FAILED')
       expect(response.body.error.details).toBeDefined()
-      const emailError = response.body.error.details.find((e) => e.field === 'email')
+      const emailError = response.body.error.details.find((e) => e.path === 'body.email')
       expect(emailError).toBeDefined()
     })
 
@@ -173,7 +179,7 @@ describe('Error Handling', () => {
   describe('Authorization Errors', () => {
     it('should return 403 when accessing resource without permission', async () => {
       const [user1, user2, user3] = await require('./helpers').createTestUsers(3)
-      const chat = await require('./helpers').createTestChat(user1.user, [user2.user])
+      const chat = await require('./helpers').createTestChat(user1.user, [user2.user.id])
 
       const response = await request(app)
         .get(`/api/v1/chats/${chat._id}`)
@@ -209,9 +215,7 @@ describe('Error Handling', () => {
       })
 
       expectError(response, StatusCodes.CONFLICT, 'EMAIL_ALREADY_EXISTS')
-      expect(response.body.error.message).toContain(
-        'This email address is already registered. Please log in instead.'
-      )
+      expect(response.body.error.message).toContain('Email already exists')
     })
 
     it('should return 409 for duplicate username', async () => {
@@ -224,9 +228,7 @@ describe('Error Handling', () => {
       })
 
       expectError(response, StatusCodes.CONFLICT, 'USERNAME_ALREADY_TAKEN')
-      expect(response.body.error.message).toContain(
-        'That username is already taken. Please try another one.'
-      )
+      expect(response.body.error.message).toContain('Username already taken')
     })
   })
 
@@ -299,7 +301,7 @@ describe('Error Handling', () => {
         .patch('/api/v1/users/me')
         .set('Authorization', `Bearer ${tokens.accessToken}`)
         .send({
-          newBio: '<script>alert("xss")</script>Safe content',
+          bio: '<script>alert("xss")</script>Safe content',
         })
 
       expect(response.status).toBe(StatusCodes.OK)
@@ -313,7 +315,7 @@ describe('Error Handling', () => {
         .patch('/api/v1/users/me')
         .set('Authorization', `Bearer ${tokens.accessToken}`)
         .send({
-          newBio: '&lt;b&gt;Bold&lt;/b&gt;',
+          bio: '&lt;b&gt;Bold&lt;/b&gt;',
         })
 
       expect(response.status).toBe(StatusCodes.OK)

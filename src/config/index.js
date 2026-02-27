@@ -3,7 +3,9 @@
  * Centralizes all configuration modules
  */
 module.exports = {
-  env: require('@config/env'),
-  db: require('@config/db'),
-  logger: require('@config/logger'),
+  env: require('./env'),
+  logger: require('./logger'),
+  mongo: require('./mongodb'),
+  postgres: require('./postgresql'),
+  redis: require('./redis'),
 }

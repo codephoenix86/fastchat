@@ -1,43 +1,70 @@
 const express = require('express')
 const mongoose = require('mongoose')
+const { StatusCodes } = require('http-status-codes')
 const { logger, env } = require('@config')
-const { HTTP_STATUS } = require('@constants')
+const { getPool } = require('@config/postgresql')
+const { getClient } = require('@config/redis')
+const { version } = require('@root/package.json')
 
 const router = express.Router()
 
-router.get('/', (req, res) => {
+const withTimeout = (promise, ms = 2000) => {
+  let timeoutId
+  const timeoutPromise = new Promise((_, reject) => {
+    timeoutId = setTimeout(() => reject(new Error(`Timeout after ${ms}ms`)), ms)
+  })
+  return Promise.race([promise, timeoutPromise]).finally(() => clearTimeout(timeoutId))
+}
+
+router.get('/', async (req, res) => {
   const health = {
     uptime: process.uptime(),
     timestamp: Date.now(),
     status: 'OK',
     environment: env.NODE_ENV,
-    version: '1.0.0',
+    version: version,
     checks: {
-      database: 'unknown',
+      mongodb: 'disconnected',
+      postgresql: 'disconnected',
+      redis: 'disconnected',
     },
   }
 
   try {
-    const dbState = mongoose.connection.readyState
-    // 0 = disconnected, 1 = connected, 2 = connecting, 3 = disconnecting
-
-    if (dbState === 1) {
-      health.checks.database = 'connected'
+    if (mongoose.connection.readyState === 1) {
+      await withTimeout(mongoose.connection.db.admin().ping())
+      health.checks.mongodb = 'connected'
     } else {
-      health.checks.database = 'disconnected'
       health.status = 'DEGRADED'
     }
   } catch (err) {
-    logger.error('Health check error:', {
-      error: err.message,
-      stack: err.stack,
-      name: err.name,
-    })
-    health.checks.database = 'error'
+    health.checks.mongodb = 'error'
     health.status = 'DEGRADED'
+    logger.error('Health check - MongoDB ping failed', { error: err.message })
   }
 
-  const statusCode = health.status === 'OK' ? HTTP_STATUS.OK : HTTP_STATUS.SERVICE_UNAVAILABLE
+  try {
+    const pool = getPool()
+    await withTimeout(pool.query('SELECT 1'))
+    health.checks.postgresql = 'connected'
+  } catch (err) {
+    health.checks.postgresql = 'error'
+    health.status = 'DEGRADED'
+    logger.error('Health check - PostgreSQL query failed', { error: err.message })
+  }
+
+  try {
+    const client = getClient()
+    await withTimeout(client.ping())
+    health.checks.redis = 'connected'
+  } catch (err) {
+    health.checks.redis = 'error'
+    health.status = 'DEGRADED'
+    logger.error('Health check - Redis ping failed', { error: err.message })
+  }
+
+  const statusCode = health.status === 'OK' ? StatusCodes.OK : StatusCodes.SERVICE_UNAVAILABLE
+
   res.status(statusCode).json(health)
 })
 

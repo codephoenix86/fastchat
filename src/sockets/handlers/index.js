@@ -3,7 +3,7 @@
  * Centralizes all socket handlers for easy import
  */
 module.exports = {
-  chatHandler: require('./chat.handler'),
-  messageHandler: require('./message.handler'),
-  typingHandler: require('./typing.handler'),
+  registerChatHandlers: require('./chat.handler'),
+  registerMessageHandlers: require('./message.handler'),
+  registerTypingHandlers: require('./typing.handler'),
 }

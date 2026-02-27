@@ -1,23 +1,25 @@
-# fastchat - Real-Time Chat Application
+# fastchat — Real-Time Chat Application
 
 [![Node.js](https://img.shields.io/badge/node-%3E%3D18.0.0-brightgreen)](https://nodejs.org/)
 [![MongoDB](https://img.shields.io/badge/mongodb-%3E%3D6.0-green)](https://www.mongodb.com/)
+[![PostgreSQL](https://img.shields.io/badge/postgresql-%3E%3D16-blue)](https://www.postgresql.org/)
+[![Redis](https://img.shields.io/badge/redis-%3E%3D7.2-red)](https://redis.io/)
 [![License: ISC](https://img.shields.io/badge/License-ISC-blue.svg)](https://opensource.org/licenses/ISC)
 
-A production-ready real-time chat application built with Node.js, Express, MongoDB, and Socket.io following REST best practices and clean architecture principles.
+A production-ready real-time chat application built with Node.js, Express, MongoDB, PostgreSQL, Redis, and Socket.io — following REST best practices and clean architecture principles.
 
 ## Features
 
-- 🔐 **JWT Authentication** - Access/refresh token system with automatic rotation
-- 👥 **User Management** - Complete CRUD operations with profile customization
-- 💬 **Real-Time Messaging** - Instant messaging with delivery/read receipts
-- 🔔 **Typing Indicators** - Real-time typing status updates
-- 👤 **Avatar Support** - User profile pictures with file upload
-- 🔍 **Advanced Queries** - Pagination, filtering, and sorting on all endpoints
-- 📊 **Online Status** - Track user presence with last seen timestamps
-- 🔒 **Security** - XSS protection, input sanitization, and security headers
-- 📝 **Comprehensive Logging** - Structured logging with daily rotation
-- ✅ **Full Test Coverage** - Unit and integration tests with 70%+ coverage
+- 🔐 **JWT Authentication** — Short-lived access tokens with opaque refresh tokens stored in Redis
+- 👥 **User Management** — PostgreSQL-backed users and profiles with full CRUD support
+- 💬 **Real-Time Messaging** — Instant messaging with delivery/read receipts via Socket.io
+- 🔔 **Typing Indicators** — Real-time typing status broadcasts
+- 👤 **Avatar Support** — Profile pictures via multipart file upload
+- 🔍 **Advanced Queries** — Pagination, search, filtering, and sorting on all list endpoints
+- 📊 **Online Presence** — Redis-backed user presence tracking with last-seen timestamps
+- 🔒 **Security** — Helmet, CORS, XSS sanitization, input validation, and rate limiting
+- 📝 **Structured Logging** — Winston with daily log rotation
+- ✅ **Full Test Coverage** — Unit and integration tests with 70%+ coverage threshold
 
 ## Quick Start
 
@@ -27,10 +29,13 @@ npm install
 
 # Configure environment
 cp .env.example .env
-# Edit .env with your settings
+# Edit .env with your database URIs and secrets
 
 # Create required directories
 mkdir -p logs uploads/public/avatars uploads/private
+
+# Run PostgreSQL migrations
+npm run migrate:up
 
 # Start development server
 npm run dev
@@ -41,60 +46,72 @@ npm test
 
 ## Documentation
 
-- **[Quick Start Guide](docs/QUICKSTART.md)** - Get up and running in 5 minutes
-- **[REST API Reference](docs/API_REST.md)** - Complete HTTP endpoint documentation
-- **[WebSocket API](docs/API_WEBSOCKET.md)** - Socket.io events and real-time features
-- **[Architecture Overview](docs/ARCHITECTURE.md)** - System design and patterns
-- **[Testing Guide](docs/TESTING.md)** - Testing strategy and best practices
+- **[Quick Start Guide](docs/QUICKSTART.md)** — Get up and running in 5 minutes
+- **[REST API Reference](docs/API_REST.md)** — Complete HTTP endpoint documentation
+- **[WebSocket API](docs/API_WEBSOCKET.md)** — Socket.io events and real-time features
+- **[Architecture Overview](docs/ARCHITECTURE.md)** — System design and patterns
+- **[Testing Guide](docs/TESTING.md)** — Testing strategy and best practices
 
 ## Tech Stack
 
-**Backend:** Node.js 18+, Express 5.x  
-**Database:** MongoDB 6.0+  
-**Real-time:** Socket.io 4.x  
-**Authentication:** JWT with bcrypt  
-**Testing:** Jest with Supertest  
-**Logging:** Winston with daily rotation
+| Layer               | Technology                             |
+| ------------------- | -------------------------------------- |
+| Runtime             | Node.js 18+, Express 5.x               |
+| Users / Auth        | PostgreSQL 16+ (via `pg`)              |
+| Chats / Messages    | MongoDB 6.0+ (via Mongoose)            |
+| Sessions / Presence | Redis 7.2+ (via ioredis)               |
+| Real-time           | Socket.io 4.x                          |
+| Authentication      | JWT (access) + opaque tokens (refresh) |
+| Validation          | Joi schemas                            |
+| Testing             | Jest, Supertest                        |
+| Logging             | Winston + daily-rotate-file            |
 
 ## Environment Configuration
 
-| Variable             | Description                         | Default       |
-| -------------------- | ----------------------------------- | ------------- |
-| `NODE_ENV`           | Environment mode                    | `development` |
-| `PORT`               | Server port                         | `3000`        |
-| `MONGO_URI`          | MongoDB connection string           | Required      |
-| `JWT_SECRET`         | JWT secret (min 32 chars)           | Required      |
-| `JWT_REFRESH_SECRET` | Refresh token secret (min 32 chars) | Required      |
+| Variable              | Description                                | Default                 |
+| --------------------- | ------------------------------------------ | ----------------------- |
+| `NODE_ENV`            | Environment mode                           | `development`           |
+| `PORT`                | Server port                                | `3000`                  |
+| `MONGODB_URI`         | MongoDB connection string                  | Required                |
+| `POSTGRES_URI`        | PostgreSQL connection string               | Required                |
+| `REDIS_URI`           | Redis connection string                    | Required                |
+| `ACCESS_TOKEN_SECRET` | Access token signing secret (min 32 chars) | Required                |
+| `ACCESS_TOKEN_TTL`    | Access token lifetime                      | `15m`                   |
+| `REFRESH_TOKEN_TTL`   | Refresh token Redis key TTL                | `7d`                    |
+| `ALLOWED_ORIGINS`     | Comma-separated CORS origins               | `http://localhost:3000` |
+| `MAX_FILE_SIZE`       | Avatar upload limit in bytes               | `5242880`               |
 
-See [.env.example](.env.example) for complete configuration.
+See [.env.example](.env.example) for the full template.
 
 ## API Overview
 
-```bash
-# Health check
-GET /health
+```
+GET  /health
 
-# Authentication
 POST /api/v1/auth/signup
 POST /api/v1/auth/login
 POST /api/v1/auth/logout
 POST /api/v1/auth/refresh
 
-# Users
 GET    /api/v1/users
 GET    /api/v1/users/:id
 GET    /api/v1/users/me
 PATCH  /api/v1/users/me
 DELETE /api/v1/users/me
+POST   /api/v1/users/me/avatar
+DELETE /api/v1/users/me/avatar
+PATCH  /api/v1/users/me/password
 
-# Chats
 GET    /api/v1/chats
 POST   /api/v1/chats
 GET    /api/v1/chats/:chatId
 PATCH  /api/v1/chats/:chatId
 DELETE /api/v1/chats/:chatId
+GET    /api/v1/chats/:chatId/members
+POST   /api/v1/chats/:chatId/members/:userId
+DELETE /api/v1/chats/:chatId/members/me
+DELETE /api/v1/chats/:chatId/members/:userId
 
-# Messages
 GET    /api/v1/chats/:chatId/messages
 POST   /api/v1/chats/:chatId/messages
 GET    /api/v1/chats/:chatId/messages/:messageId
@@ -102,17 +119,23 @@ PATCH  /api/v1/chats/:chatId/messages/:messageId
 DELETE /api/v1/chats/:chatId/messages/:messageId
 ```
 
-See [REST API Reference](docs/API_REST.md) for detailed documentation.
+See [REST API Reference](docs/API_REST.md) for full documentation.
 
 ## Scripts
 
 ```bash
-npm start              # Production server
-npm run dev            # Development with nodemon
-npm test               # Run all tests with coverage
-npm run test:watch     # Run tests in watch mode
-npm run test:unit      # Run unit tests only
-npm run test:integration # Run integration tests only
+npm start                        # Production server
+npm run dev                      # Development with nodemon
+npm test                         # All tests with coverage
+npm run test:watch               # Watch mode
+npm run test:unit                # Unit tests only
+npm run test:integration         # Integration tests only
+npm run test:sequential          # Run tests serially (debug)
+npm run migrate:up               # Apply PostgreSQL migrations
+npm run migrate:down             # Roll back last migration
+npm run migrate:create -- <name> # Create a new migration file
+npm run lint                     # Lint source files
+npm run format                   # Format with Prettier
 ```
 
 ## Project Structure
@@ -120,23 +143,29 @@ npm run test:integration # Run integration tests only
 ```
 fastchat/
 ├── src/
-│   ├── config/          # Configuration and setup
-│   ├── controllers/     # Request handlers
-│   ├── middlewares/     # Express middleware
-│   ├── models/          # Mongoose schemas
-│   ├── repositories/    # Data access layer
-│   ├── routes/          # API routes
+│   ├── config/          # DB connections (mongo, postgres, redis), logger, env
+│   ├── constants/       # Shared enums and validation constants
+│   ├── controllers/     # Express route handlers
+│   ├── errors/          # Custom error classes
+│   ├── middlewares/     # Auth, validation, upload, sanitization, rate-limit
+│   ├── models/          # Mongoose schemas (Chat, Message)
+│   ├── repositories/    # Data-access layer (mongo + postgres + redis)
+│   ├── routes/          # Express router definitions
+│   ├── schemas/         # Joi validation schemas
 │   ├── services/        # Business logic
-│   ├── sockets/         # Socket.io implementation
-│   ├── utils/           # Helper functions
-│   ├── constants/       # App-wide constants and enums
-│   ├── errors/          # Custom error classes and handling
-│   └── app.js           # Express application setup
-├── tests/               # Test suites
-├── uploads/             # User-uploaded files
-├── logs/                # Application logs
+│   ├── sockets/         # Socket.io server, handlers, middleware
+│   ├── utils/           # asyncHandler, JWT helpers, pagination, ApiResponse
+│   └── app.js           # Express app setup
+├── migrations/          # node-pg-migrate PostgreSQL migrations
+├── tests/
+│   ├── integration/     # Supertest API tests
+│   ├── unit/            # Isolated service / middleware tests
+│   ├── helpers/         # DB connect/clear/disconnect helpers
+│   └── setup.js         # Jest global setup
+├── uploads/             # Stored avatar files
+├── logs/                # Rotated application logs
 ├── docs/                # Documentation
-└── server.js            # Server entry point
+└── server.js            # Entry point
 ```
 
 ## License
@@ -145,13 +174,4 @@ ISC
 
 ## Author
 
-Naresh Lohar
-
-## Repository
-
-https://github.com/codephoenix86/fastchat
-
-## Support
-
-- 📖 [Documentation](docs/)
-- 🐛 [Report Issues](https://github.com/codephoenix86/fastchat/issues)
+Naresh Lohar — [GitHub](https://github.com/codephoenix86/fastchat)

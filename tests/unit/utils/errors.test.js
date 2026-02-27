@@ -44,10 +44,10 @@ describe('Error Classes', () => {
     })
 
     it('should accept error details array', () => {
-      const details = [{ field: 'email', message: 'Invalid email' }]
-      const error = new ValidationError('Validation failed', details)
+      const errors = [{ path: 'body.email', message: 'Invalid email' }]
+      const error = new ValidationError('Invalid request data', 'VALIDATION_FAILED', errors)
 
-      expect(error.errors).toEqual(details)
+      expect(error.errors).toEqual(errors)
     })
   })
 

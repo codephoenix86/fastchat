@@ -1,1 +1,6 @@
-exports.db = require('./db.helpers')
+const { connectTestDB, clearTestDB, disconnectTestDB } = require('./db.helpers')
+module.exports = {
+  connectTestDB,
+  clearTestDB,
+  disconnectTestDB,
+}

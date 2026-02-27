@@ -1,7 +1,8 @@
+const { StatusCodes } = require('http-status-codes')
 const { messageService } = require('@services')
 const { ApiResponse, pagination } = require('@utils')
-const { StatusCodes } = require('http-status-codes')
-const { socketServer, SOCKET_EVENTS } = require('@sockets')
+const { SOCKET_EVENTS } = require('@constants')
+const { io } = require('@sockets')
 
 exports.sendMessage = async (req, res) => {
   const { content } = req.body
@@ -10,7 +11,6 @@ exports.sendMessage = async (req, res) => {
   const message = await messageService.sendMessage({ content, chatId }, req.user.id)
 
   // Emit real-time message to chat room
-  const io = socketServer.get()
   io.to(chatId).emit(SOCKET_EVENTS.MESSAGE_NEW, message)
 
   res
@@ -33,7 +33,7 @@ exports.getMessages = async (req, res) => {
   res.status(StatusCodes.OK).json(new ApiResponse('Messages fetched successfully', paginatedData))
 }
 
-exports.getMessage = async (req, res) => {
+exports.getMessageById = async (req, res) => {
   const message = await messageService.getMessageById(req.params.messageId, req.user.id)
 
   res.status(StatusCodes.OK).json(new ApiResponse('Message fetched successfully', { message }))
@@ -46,7 +46,6 @@ exports.updateMessage = async (req, res) => {
   const message = await messageService.updateMessage(req.params.messageId, req.user.id, content)
 
   // Emit real-time update
-  const io = socketServer.get()
   io.to(chatId).emit(SOCKET_EVENTS.MESSAGE_UPDATED, message)
 
   res.status(StatusCodes.OK).json(new ApiResponse('Message updated successfully', { message }))
@@ -58,7 +57,6 @@ exports.deleteMessage = async (req, res) => {
   await messageService.deleteMessage(messageId, req.user.id)
 
   // Emit real-time deletion
-  const io = socketServer.get()
   io.to(chatId).emit(SOCKET_EVENTS.MESSAGE_DELETED, { messageId })
 
   res.status(StatusCodes.OK).json(new ApiResponse('Message deleted successfully'))

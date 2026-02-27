@@ -1,11 +1,23 @@
+const mongoose = require('mongoose')
+const postgres = require('@config/postgresql')
+const redis = require('@config/redis')
+const { StatusCodes } = require('http-status-codes')
 const request = require('supertest')
 const app = require('@/app')
-const {
-  db: { connectTestDB, disconnectTestDB },
-} = require('@tests/helpers')
-const { StatusCodes } = require('http-status-codes')
+const { connectTestDB, clearTestDB, disconnectTestDB } = require('@tests/helpers')
 
 describe('Health API', () => {
+  beforeAll(async () => {
+    await connectTestDB()
+  })
+
+  beforeEach(async () => {
+    await clearTestDB()
+  })
+
+  afterAll(async () => {
+    await disconnectTestDB()
+  })
   describe('GET /health', () => {
     it('should return health status with database connected', async () => {
       const response = await request(app).get('/health')
@@ -18,7 +30,9 @@ describe('Health API', () => {
       expect(response.body.environment).toBeDefined()
       expect(response.body.version).toBe('1.0.0')
       expect(response.body.checks).toBeDefined()
-      expect(response.body.checks.database).toBe('connected')
+      expect(response.body.checks.mongodb).toBe('connected')
+      expect(response.body.checks.postgresql).toBe('connected')
+      expect(response.body.checks.redis).toBe('connected')
     })
 
     it('should include correct environment', async () => {
@@ -29,17 +43,29 @@ describe('Health API', () => {
     })
 
     it('should return degraded status when database is disconnected', async () => {
-      // Temporarily close database connection
-      await disconnectTestDB()
+      const mongoSpy = jest.spyOn(mongoose.connection.db, 'admin').mockReturnValue({
+        ping: jest.fn().mockRejectedValueOnce(new Error('Mongo Unreachable')),
+      })
+
+      const pgSpy = jest
+        .spyOn(postgres.getPool(), 'query')
+        .mockRejectedValueOnce(new Error('PG Unreachable'))
+
+      const redisSpy = jest
+        .spyOn(redis.getClient(), 'ping')
+        .mockRejectedValueOnce(new Error('Redis Unreachable'))
 
       const response = await request(app).get('/health')
 
       expect(response.status).toBe(StatusCodes.SERVICE_UNAVAILABLE)
       expect(response.body.status).toBe('DEGRADED')
-      expect(response.body.checks.database).toBe('disconnected')
+      expect(response.body.checks.mongodb).toBe('error')
+      expect(response.body.checks.postgresql).toBe('error')
+      expect(response.body.checks.redis).toBe('error')
 
-      // Reconnect for other tests
-      await connectTestDB()
+      mongoSpy.mockRestore()
+      pgSpy.mockRestore()
+      redisSpy.mockRestore()
     })
 
     it('should return uptime as positive number', async () => {
@@ -74,7 +100,9 @@ describe('Health API', () => {
         environment: expect.any(String),
         version: expect.any(String),
         checks: expect.objectContaining({
-          database: expect.any(String),
+          mongodb: expect.any(String),
+          postgresql: expect.any(String),
+          redis: expect.any(String),
         }),
       })
     })

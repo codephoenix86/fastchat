@@ -1,12 +1,20 @@
 # Quick Start Guide
 
-Get fastchat running on your local machine in 5 minutes.
+Get fastchat running on your local machine in about 10 minutes.
 
 ## Prerequisites
 
-- Node.js >= 18.0.0
-- MongoDB >= 6.0 (running locally or accessible remotely)
-- npm >= 9.0.0
+| Requirement | Version   |
+| ----------- | --------- |
+| Node.js     | >= 18.0.0 |
+| npm         | >= 9.0.0  |
+| MongoDB     | >= 6.0    |
+| PostgreSQL  | >= 16     |
+| Redis       | >= 7.2    |
+
+All three databases must be running before the server will start.
+
+---
 
 ## Step 1: Clone and Install
 
@@ -16,246 +24,233 @@ cd fastchat
 npm install
 ```
 
+---
+
 ## Step 2: Configure Environment
 
 ```bash
-# Copy the example environment file
 cp .env.example .env
-
-# Edit .env with your settings
-nano .env  # or use your preferred editor
 ```
 
-**Minimum required configuration:**
+Open `.env` and fill in the required values:
 
 ```env
 NODE_ENV=development
 PORT=3000
-MONGO_URI=mongodb://localhost:27017/fastchat
 
-# Generate secure secrets (min 32 characters each)
-JWT_SECRET=your_very_long_secret_at_least_32_characters_here_change_me
-JWT_REFRESH_SECRET=another_very_long_secret_at_least_32_characters_change_me
+# MongoDB — stores chats and messages
+MONGODB_URI=mongodb://localhost:27017/fastchat
+
+# PostgreSQL — stores users and profiles
+POSTGRES_URI=postgresql://postgres:password@localhost:5432/fastchat
+
+# Redis — stores refresh tokens and online presence
+REDIS_URI=redis://localhost:6379
+
+# JWT secrets — must each be at least 32 characters
+ACCESS_TOKEN_SECRET=your_very_long_secret_at_least_32_characters_here
+
+ACCESS_TOKEN_TTL=15m
+REFRESH_TOKEN_TTL=7d
 ```
 
-**Quick secret generation:**
+Generate secure secrets in one command:
 
 ```bash
-# Generate secure secrets using Node.js
 node -e "console.log(require('crypto').randomBytes(32).toString('hex'))"
 ```
 
-## Step 3: Create Required Directories
+Run it twice to get two different secrets.
+
+---
+
+## Step 3: Start the Databases
+
+### Using Docker (recommended)
+
+```bash
+# MongoDB
+docker run -d -p 27017:27017 --name fastchat-mongo mongo:6
+
+# PostgreSQL
+docker run -d -p 5432:5432 --name fastchat-pg \
+  -e POSTGRES_PASSWORD=password \
+  -e POSTGRES_DB=fastchat \
+  postgres:16-alpine
+
+# Redis
+docker run -d -p 6379:6379 --name fastchat-redis redis:7.2-alpine
+```
+
+Or use the provided `compose.yml` (requires a built image):
+
+```bash
+docker compose up mongodb postgres redis -d
+```
+
+### Using system services
+
+```bash
+# macOS (Homebrew)
+brew services start mongodb-community
+brew services start postgresql
+brew services start redis
+
+# Ubuntu / Debian
+sudo systemctl start mongod postgresql redis-server
+```
+
+---
+
+## Step 4: Create Required Directories
 
 ```bash
 mkdir -p logs uploads/public/avatars uploads/private
 ```
 
-## Step 4: Start MongoDB
+---
 
-If you don't have MongoDB running:
+## Step 5: Run PostgreSQL Migrations
+
+fastchat uses [node-pg-migrate](https://github.com/salsita/node-pg-migrate) to manage the PostgreSQL schema. You must run migrations before starting the server for the first time.
 
 ```bash
-# Using Docker (recommended for quick start)
-docker run -d -p 27017:27017 --name mongodb mongo:6
-
-# Or start your local MongoDB service
-# macOS: brew services start mongodb-community
-# Ubuntu: sudo systemctl start mongod
-# Windows: net start MongoDB
+npm run migrate:up
 ```
 
-## Step 5: Start the Server
+This creates the `users` and `profiles` tables (and the `pgcrypto` extension needed for UUID generation).
+
+---
+
+## Step 6: Start the Server
 
 ```bash
-# Development mode (with auto-reload)
+# Development (auto-reload on file changes)
 npm run dev
 
-# Production mode
+# Production
 npm start
 ```
 
-You should see:
+A successful startup looks like:
 
 ```
-Server listening on port 3000
-Environment: development
-Application started successfully
+info: All databases connected
+info: Socket.io server initialized
+info: Server listening on port 3000
 ```
 
-## Step 6: Test the API
+If any database connection fails, the process exits immediately with a logged error.
 
-### Health Check
+---
+
+## Step 7: Verify with a Health Check
 
 ```bash
 curl http://localhost:3000/health
 ```
 
-**Response:**
+Expected response:
 
 ```json
 {
-  "uptime": 5.123,
+  "uptime": 5.12,
   "timestamp": 1706000000000,
   "status": "OK",
   "environment": "development",
   "version": "1.0.0",
   "checks": {
-    "database": "connected"
+    "mongodb": "connected",
+    "postgresql": "connected",
+    "redis": "connected"
   }
 }
 ```
 
-### Create a User
+If `status` is `DEGRADED`, check the `checks` object to see which database is unreachable.
+
+---
+
+## Step 8: Try the API
+
+### Create a user
 
 ```bash
 curl -X POST http://localhost:3000/api/v1/auth/signup \
   -H "Content-Type: application/json" \
   -d '{
-    "username": "testuser",
-    "email": "test@example.com",
+    "username": "alice",
+    "email": "alice@example.com",
     "password": "Password@123"
   }'
 ```
 
-### Login
+### Log in
 
 ```bash
 curl -X POST http://localhost:3000/api/v1/auth/login \
   -H "Content-Type: application/json" \
-  -d '{
-    "username": "testuser",
-    "password": "Password@123"
-  }'
+  -d '{"username": "alice", "password": "Password@123"}'
 ```
 
-Save the `accessToken` from the response for authenticated requests.
+Save the `accessToken` and `refreshToken` from the response.
 
-### Get Current User
+### Get your profile
 
 ```bash
 curl http://localhost:3000/api/v1/users/me \
-  -H "Authorization: Bearer YOUR_ACCESS_TOKEN"
+  -H "Authorization: Bearer <accessToken>"
 ```
+
+---
 
 ## Next Steps
 
-### Explore the API
+- **[REST API Reference](API_REST.md)** — full endpoint catalogue
+- **[WebSocket API](API_WEBSOCKET.md)** — real-time connection guide
+- **[Architecture Overview](ARCHITECTURE.md)** — understand how the three databases are used
 
-- [REST API Reference](API_REST.md) - Complete endpoint documentation
-- [WebSocket API](API_WEBSOCKET.md) - Real-time features
-
-### Run Tests
-
-```bash
-# Run all tests
-npm test
-
-# Run tests in watch mode
-npm run test:watch
-
-# Run specific test suites
-npm run test:unit
-npm run test:integration
-```
-
-### Connect a Frontend
-
-Example WebSocket connection:
-
-```javascript
-import io from 'socket.io-client'
-
-const socket = io('http://localhost:3000', {
-  auth: {
-    token: 'YOUR_ACCESS_TOKEN',
-  },
-})
-
-socket.on('connect', () => {
-  console.log('Connected to server')
-})
-
-socket.on('message:new', (message) => {
-  console.log('New message:', message)
-})
-```
+---
 
 ## Common Issues
 
-### MongoDB Connection Error
+### `connect ECONNREFUSED` for any database
 
-```
-Error: connect ECONNREFUSED 127.0.0.1:27017
-```
-
-**Solution:** Ensure MongoDB is running on port 27017
+The relevant database is not running. Start it and retry.
 
 ```bash
-# Check if MongoDB is running
-docker ps | grep mongo
-# or
-mongosh  # Should connect successfully
+# Check running containers
+docker ps
+
+# Or check system services
+sudo systemctl status mongod postgresql redis-server
 ```
 
-### Port Already in Use
+### `ACCESS_TOKEN_SECRET must be at least 32 characters long`
 
-```
-Error: listen EADDRINUSE: address already in use :::3000
-```
-
-**Solution:** Change the port in `.env` or kill the process using port 3000
+Your `.env` secret is too short. Generate a proper one:
 
 ```bash
-# Find process using port 3000
+node -e "console.log(require('crypto').randomBytes(32).toString('hex'))"
+```
+
+### Port 3000 already in use
+
+```bash
+# Find the process
 lsof -ti:3000
 
-# Kill the process
+# Kill it
 kill -9 $(lsof -ti:3000)
 
-# Or change port in .env
+# Or change the port in .env
 PORT=3001
 ```
 
-### JWT Secret Error
+### PostgreSQL `relation "users" does not exist`
 
-```
-Error: JWT_SECRET must be at least 32 characters long
-```
+Migrations have not been run. Execute `npm run migrate:up`.
 
-**Solution:** Generate a proper secret (see Step 2)
+### `relation already exists` on `migrate:up`
 
-## Development Tips
-
-### Hot Reload
-
-The development server uses nodemon for automatic reloading on file changes.
-
-### Debug Mode
-
-```bash
-# Enable debug logging
-LOG_LEVEL=debug npm run dev
-
-# Run with Node.js inspector
-node --inspect server.js
-```
-
-### API Testing Tools
-
-- **Postman**: Import the API collection (see [API_REST.md](API_REST.md))
-- **HTTPie**: `http POST :3000/api/v1/auth/signup username=test email=test@example.com password=Password@123`
-- **curl**: Examples provided above
-
-### Database GUI
-
-Use MongoDB Compass or Studio 3T to view your database:
-
-```
-Connection String: mongodb://localhost:27017/fastchat
-```
-
-## Additional Resources
-
-- [Architecture Overview](ARCHITECTURE.md)
-- [Testing Guide](TESTING.md)
+The migration was already applied. This is safe to ignore; node-pg-migrate tracks which migrations have run.

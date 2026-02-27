@@ -1,5 +1,3 @@
 exports.asyncHandler = require('./async-handler')
-exports.jwt = require('./jwt')
 exports.ApiResponse = require('./response')
 exports.pagination = require('./pagination')
-exports.message = require('./validation-message')

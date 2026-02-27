@@ -3,23 +3,19 @@ module.exports = {
     PRIVATE: 'private',
     GROUP: 'group',
   },
-
   MESSAGE_TYPES: {
     TEXT: 'text',
     FILE: 'file',
   },
-
   MESSAGE_STATUS: {
     SENT: 'sent',
     DELIVERED: 'delivered',
     READ: 'read',
   },
-
   USER_ROLES: {
     USER: 'user',
     ADMIN: 'admin',
   },
-
   VALIDATION: {
     USERNAME: {
       MIN_LENGTH: 3,
@@ -38,18 +34,28 @@ module.exports = {
       ALLOWED_IMAGE_TYPES: ['image/jpeg', 'image/jpg', 'image/png', 'image/gif'],
     },
   },
+  SOCKET_EVENTS: {
+    // Connection events
+    CONNECTION: 'connection',
+    DISCONNECT: 'disconnect',
 
-  HTTP_STATUS: {
-    OK: 200,
-    CREATED: 201,
-    BAD_REQUEST: 400,
-    UNAUTHORIZED: 401,
-    FORBIDDEN: 403,
-    NOT_FOUND: 404,
-    CONFLICT: 409,
-    PAYLOAD_TOO_LARGE: 413,
-    TOO_MANY_REQUESTS: 429,
-    INTERNAL_SERVER_ERROR: 500,
-    SERVICE_UNAVAILABLE: 503,
+    // Chat events
+    CHAT_JOIN: 'chat:join',
+    CHAT_LEAVE: 'chat:leave',
+
+    // Message events
+    MESSAGE_NEW: 'message:new',
+    MESSAGE_UPDATED: 'message:updated',
+    MESSAGE_DELETED: 'message:deleted',
+    MESSAGE_DELIVERED: 'message:delivered',
+    MESSAGE_READ: 'message:read',
+
+    // Typing events
+    TYPING_START: 'message:start-typing',
+    TYPING_STOP: 'message:stop-typing',
+
+    // User events
+    USER_ONLINE: 'user:online',
+    USER_OFFLINE: 'user:offline',
   },
 }

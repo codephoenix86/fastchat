@@ -1,10 +1,11 @@
+const crypto = require('crypto')
 const request = require('supertest')
 const path = require('path')
 const fs = require('fs').promises
 const app = require('@/app')
-const {
-  db: { clearDatabase },
-} = require('@tests/helpers')
+const { connectTestDB, clearTestDB, disconnectTestDB } = require('@tests/helpers')
+const { postgres } = require('@config')
+const pool = postgres.getPool()
 const { StatusCodes } = require('http-status-codes')
 const {
   createTestUser,
@@ -13,12 +14,19 @@ const {
   expectSuccess,
   expectPagination,
   generateUsername,
-  generateEmail,
 } = require('./helpers')
 
 describe('Users API', () => {
+  beforeAll(async () => {
+    await connectTestDB()
+  })
+
   beforeEach(async () => {
-    await clearDatabase()
+    await clearTestDB()
+  })
+
+  afterAll(async () => {
+    await disconnectTestDB()
   })
 
   describe('GET /api/v1/users', () => {
@@ -96,10 +104,10 @@ describe('Users API', () => {
     it('should sort users by createdAt descending', async () => {
       const user3 = await createTestUser()
 
-      const response = await request(app).get('/api/v1/users').query({ sort: '-createdAt' })
+      const response = await request(app).get('/api/v1/users').query({ sort: '-created_at' })
 
       expectSuccess(response, StatusCodes.OK)
-      expect(response.body.data[0].id).toBe(user3.user._id.toString())
+      expect(response.body.data[0].id).toBe(user3.user.id)
     })
 
     it('should return empty array when no users match search', async () => {
@@ -128,17 +136,18 @@ describe('Users API', () => {
     it('should get user by id', async () => {
       const { user } = await createTestUser()
 
-      const response = await request(app).get(`/api/v1/users/${user._id}`)
+      const response = await request(app).get(`/api/v1/users/${user.id}`)
 
       expectSuccess(response, StatusCodes.OK, 'User fetched successfully')
-      expect(response.body.data.user.id).toBe(user._id.toString())
+      expect(response.body.data.user.id).toBe(user.id)
       expect(response.body.data.user.username).toBe(user.username)
       expect(response.body.data.user.email).toBe(user.email)
       expect(response.body.data.user.password).toBeUndefined()
     })
 
     it('should return 404 for non-existent user', async () => {
-      const response = await request(app).get('/api/v1/users/507f1f77bcf86cd799439011')
+      const userId = crypto.randomUUID()
+      const response = await request(app).get(`/api/v1/users/${userId}`)
 
       expectError(response, StatusCodes.NOT_FOUND, 'NOT_FOUND')
     })
@@ -146,7 +155,7 @@ describe('Users API', () => {
     it('should return 400 for invalid user id', async () => {
       const response = await request(app).get('/api/v1/users/invalid-id')
 
-      expectError(response, StatusCodes.BAD_REQUEST, 'BAD_REQUEST')
+      expectError(response, StatusCodes.BAD_REQUEST, 'VALIDATION_FAILED')
     })
   })
 
@@ -159,7 +168,7 @@ describe('Users API', () => {
         .set('Authorization', `Bearer ${tokens.accessToken}`)
 
       expectSuccess(response, StatusCodes.OK, 'Current user details')
-      expect(response.body.data.user.id).toBe(user._id.toString())
+      expect(response.body.data.user.id).toBe(user.id)
       expect(response.body.data.user.username).toBe(user.username)
     })
 
@@ -181,15 +190,15 @@ describe('Users API', () => {
   describe('PATCH /api/v1/users/me', () => {
     it('should update username', async () => {
       const { tokens } = await createTestUser()
-      const newUsername = generateUsername()
+      const username = generateUsername()
 
       const response = await request(app)
         .patch('/api/v1/users/me')
         .set('Authorization', `Bearer ${tokens.accessToken}`)
-        .send({ newUsername })
+        .send({ username })
 
       expectSuccess(response, StatusCodes.OK, 'User updated successfully')
-      expect(response.body.data.user.username).toBe(newUsername)
+      expect(response.body.data.user.username).toBe(username)
     })
 
     it('should update bio', async () => {
@@ -198,92 +207,10 @@ describe('Users API', () => {
       const response = await request(app)
         .patch('/api/v1/users/me')
         .set('Authorization', `Bearer ${tokens.accessToken}`)
-        .send({ newBio: 'Updated bio' })
+        .send({ bio: 'Updated bio' })
 
       expectSuccess(response, StatusCodes.OK)
       expect(response.body.data.user.bio).toBe('Updated bio')
-    })
-
-    it('should update email with old password', async () => {
-      const { tokens } = await createTestUser()
-      const newEmail = generateEmail()
-
-      const response = await request(app)
-        .patch('/api/v1/users/me')
-        .set('Authorization', `Bearer ${tokens.accessToken}`)
-        .send({
-          newEmail,
-          oldPassword: 'Password@123',
-        })
-
-      expectSuccess(response, StatusCodes.OK)
-      expect(response.body.data.user.email).toBe(newEmail)
-    })
-
-    it('should update password with old password', async () => {
-      const { tokens } = await createTestUser()
-
-      const response = await request(app)
-        .patch('/api/v1/users/me')
-        .set('Authorization', `Bearer ${tokens.accessToken}`)
-        .send({
-          newPassword: 'NewPassword@456',
-          oldPassword: 'Password@123',
-        })
-
-      expectSuccess(response, StatusCodes.OK)
-    })
-
-    it('should return 400 when updating email without old password', async () => {
-      const { tokens } = await createTestUser()
-
-      const response = await request(app)
-        .patch('/api/v1/users/me')
-        .set('Authorization', `Bearer ${tokens.accessToken}`)
-        .send({ newEmail: generateEmail() })
-
-      expectError(response, StatusCodes.BAD_REQUEST, 'VALIDATION_FAILED')
-    })
-
-    it('should return 400 when updating password without old password', async () => {
-      const { tokens } = await createTestUser()
-
-      const response = await request(app)
-        .patch('/api/v1/users/me')
-        .set('Authorization', `Bearer ${tokens.accessToken}`)
-        .send({ newPassword: 'NewPassword@456' })
-
-      expectError(response, StatusCodes.BAD_REQUEST, 'VALIDATION_FAILED')
-    })
-
-    it('should return 401 for incorrect old password', async () => {
-      const { tokens } = await createTestUser()
-
-      const response = await request(app)
-        .patch('/api/v1/users/me')
-        .set('Authorization', `Bearer ${tokens.accessToken}`)
-        .send({
-          newEmail: generateEmail(),
-          oldPassword: 'WrongPassword@123',
-        })
-
-      expectError(response, StatusCodes.UNAUTHORIZED, 'INVALID_PASSWORD')
-    })
-
-    it('should return 409 for duplicate email', async () => {
-      const existingEmail = generateEmail()
-      await createTestUser({ email: existingEmail })
-      const { tokens } = await createTestUser()
-
-      const response = await request(app)
-        .patch('/api/v1/users/me')
-        .set('Authorization', `Bearer ${tokens.accessToken}`)
-        .send({
-          newEmail: existingEmail,
-          oldPassword: 'Password@123',
-        })
-
-      expectError(response, StatusCodes.CONFLICT, 'EMAIL_ALREADY_EXISTS')
     })
 
     it('should return 409 for duplicate username', async () => {
@@ -294,7 +221,7 @@ describe('Users API', () => {
       const response = await request(app)
         .patch('/api/v1/users/me')
         .set('Authorization', `Bearer ${tokens.accessToken}`)
-        .send({ newUsername: existingUsername })
+        .send({ username: existingUsername })
 
       expectError(response, StatusCodes.CONFLICT, 'USERNAME_ALREADY_TAKEN')
     })
@@ -305,7 +232,7 @@ describe('Users API', () => {
       const response = await request(app)
         .patch('/api/v1/users/me')
         .set('Authorization', `Bearer ${tokens.accessToken}`)
-        .send({ newUsername: '123invalid' })
+        .send({ username: '123invalid' })
 
       expectError(response, StatusCodes.BAD_REQUEST, 'VALIDATION_FAILED')
     })
@@ -316,7 +243,7 @@ describe('Users API', () => {
       const response = await request(app)
         .patch('/api/v1/users/me')
         .set('Authorization', `Bearer ${tokens.accessToken}`)
-        .send({ newBio: 'a'.repeat(201) })
+        .send({ bio: 'a'.repeat(201) })
 
       expectError(response, StatusCodes.BAD_REQUEST, 'VALIDATION_FAILED')
     })
@@ -343,8 +270,11 @@ describe('Users API', () => {
       expectSuccess(response, StatusCodes.OK, 'Account deleted successfully')
 
       // Verify user is deleted
-      const deletedUser = await require('@models').User.findById(user._id)
-      expect(deletedUser).toBeNull()
+      const result = await pool.query(
+        'SELECT EXISTS(SELECT 1 FROM users WHERE username = $1 AND email = $2)',
+        [user.username, user.email]
+      )
+      expect(result.rows[0].exists).toBe(false)
     })
 
     it('should return 401 without authentication', async () => {
@@ -457,7 +387,7 @@ describe('Users API', () => {
         .patch('/api/v1/users/me/password')
         .set('Authorization', `Bearer ${tokens.accessToken}`)
         .send({
-          oldPassword: 'Password@123',
+          currentPassword: 'Password@123',
           newPassword: 'NewPassword@456',
         })
 
@@ -493,7 +423,7 @@ describe('Users API', () => {
         .patch('/api/v1/users/me/password')
         .set('Authorization', `Bearer ${tokens.accessToken}`)
         .send({
-          oldPassword: 'WrongPassword@123',
+          currentPassword: 'WrongPassword@123',
           newPassword: 'NewPassword@456',
         })
 

@@ -1,4 +1,4 @@
-const sanitize = require('@middlewares/sanitize.middleware')
+const sanitize = require('@middlewares/sanitization.middleware')
 const { mockRequest, mockResponse, mockNext } = require('@tests/unit/helpers')
 
 describe('Sanitize Middleware', () => {

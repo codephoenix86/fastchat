@@ -1,670 +1,326 @@
-# Architecture Documentation
+# Architecture Overview
 
-System architecture, design patterns, and technical implementation details for fastchat.
-
-## Table of Contents
-
-- [System Architecture](#system-architecture)
-- [Request Flow](#request-flow)
-- [Socket.io Real-time Architecture](#socketio-real-time-architecture)
-- [Database Schema](#database-schema)
-- [Design Patterns](#design-patterns)
+System design, data flow, database schemas, and design patterns for fastchat.
 
 ---
 
 ## System Architecture
 
-The application follows a layered architecture with clear separation of concerns:
+fastchat uses **three purpose-built databases** rather than a single store:
+
+| Database       | Role                                                             |
+| -------------- | ---------------------------------------------------------------- |
+| **PostgreSQL** | Users, profiles, roles — relational, strongly typed, ACID        |
+| **MongoDB**    | Chats and messages — flexible documents, easy horizontal scaling |
+| **Redis**      | Refresh token sessions, online presence — in-memory, TTL-native  |
 
 ```
-┌─────────────┐         ┌────────────────────────────────────┐
-│   Client    │◄────────┤       HTTP/WebSocket               │
-│  (Browser/  │         │                                    │
-│   Mobile)   │         └────────────────────────────────────┘
-└─────────────┘                        │
-                                       ▼
-                       ┌───────────────────────────────┐
-                       │    Express Application        │
-                       │  ┌─────────────────────────┐  │
-                       │  │   Middleware Stack      │  │
-                       │  │  • Helmet (Security)    │  │
-                       │  │  • CORS                 │  │
-                       │  │  • Body Parser          │  │
-                       │  │  • Request ID           │  │
-                       │  │  • Sanitization (XSS)   │  │
-                       │  │  • Authentication       │  │
-                       │  └─────────────────────────┘  │
-                       │                               │
-                       │  ┌─────────────────────────┐  │
-                       │  │   Routes (REST API)     │  │
-                       │  │  /api/v1/auth           │  │
-                       │  │  /api/v1/users          │  │
-                       │  │  /api/v1/chats          │  │
-                       │  │  /api/v1/.../messages   │  │
-                       │  └─────────────────────────┘  │
-                       └───────────────────────────────┘
+┌──────────┐        HTTP / WebSocket
+│  Client  │◄──────────────────────────────────────────────┐
+└──────────┘                                               │
+                                                           │
+                        ┌──────────────────────────────────┴──────┐
+                        │           Express Application           │
+                        │  Helmet · CORS · Body Parser · XSS      │
+                        │  Request ID · Logger · Auth · Validate  │
+                        └──────────────┬──────────────────────────┘
                                        │
-                       ┌───────────────┴───────────────┐
-                       ▼                               ▼
-            ┌──────────────────┐           ┌──────────────────┐
-            │ Socket.io Server │           │   Controllers    │
-            │                  │           │                  │
-            │ • Authentication │           │ • Request        │
-            │ • Chat Rooms     │           │   Validation     │
-            │ • Online Users   │           │ • Response       │
-            │ • Event Handlers │           │   Formatting     │
-            └──────────────────┘           └──────────────────┘
-                       │                               │
-                       └───────────────┬───────────────┘
-                                       ▼
-                            ┌──────────────────┐
-                            │    Services      │
-                            │  (Business Logic)│
-                            │                  │
-                            │ • Auth Service   │
-                            │ • User Service   │
-                            │ • Chat Service   │
-                            │ • Message Service│
-                            └──────────────────┘
-                                       │
-                                       ▼
-                            ┌──────────────────┐
-                            │   Repositories   │
-                            │  (Data Access)   │
-                            │                  │
-                            │ • User Repo      │
-                            │ • Chat Repo      │
-                            │ • Message Repo   │
-                            │ • Token Repo     │
-                            └──────────────────┘
-                                       │
-                                       ▼
-                            ┌──────────────────┐
-                            │   MongoDB        │
-                            │                  │
-                            │ • Users          │
-                            │ • Chats          │
-                            │ • Messages       │
-                            │ • RefreshTokens  │
-                            └──────────────────┘
+                  ┌────────────────────┼────────────────────┐
+                  ▼                    ▼                     ▼
+           ┌──────────┐        ┌──────────────┐      ┌──────────────┐
+           │  Routes  │        │  Socket.io   │      │   Health     │
+           │  /api    │        │   Server     │      │   /health    │
+           └────┬─────┘        └──────┬───────┘      └──────────────┘
+                │                     │
+                ▼                     │
+         ┌─────────────┐              │
+         │ Controllers │              │
+         └──────┬──────┘              │
+                │                     │
+                └──────────┬──────────┘
+                           ▼
+                  ┌─────────────────┐
+                  │    Services     │
+                  │ auth · user     │
+                  │ chat · message  │
+                  │ token · presence│
+                  └────────┬────────┘
+                           │
+          ┌────────────────┼────────────────┐
+          ▼                ▼                ▼
+   ┌────────────┐  ┌─────────────┐  ┌─────────────┐
+   │    User    │  │    Chat /   │  │    Token    │
+   │ Repository │  │   Message   │  │ Repository  │
+   │(PostgreSQL)│  │ Repository  │  │  (Redis)    │
+   └─────┬──────┘  │ (MongoDB)   │  └──────┬──────┘
+         │         └──────┬──────┘         │
+         ▼                ▼                ▼
+   ┌──────────┐    ┌──────────────┐  ┌──────────┐
+   │PostgreSQL│    │   MongoDB    │  │  Redis   │
+   │ users    │    │ chats        │  │ rt:*     │
+   │ profiles │    │ messages     │  │ online:* │
+   └──────────┘    └──────────────┘  └──────────┘
 ```
-
-### Key Components
-
-#### 1. Express Application Layer
-
-- **Middleware Stack**: Handles security, parsing, validation, and authentication
-- **Routes**: RESTful API endpoints organized by resource
-- **Error Handling**: Centralized error handling with custom error types
-
-#### 2. Socket.io Server
-
-- **Real-time Communication**: Bidirectional event-based communication
-- **Authentication**: JWT-based socket authentication
-- **Room Management**: Chat room joining/leaving functionality
-- **Online Status Tracking**: Manages user online/offline states
-
-#### 3. Controllers
-
-- Handle HTTP requests and responses
-- Extract and validate request data
-- Call appropriate service methods
-- Format responses using ApiResponse utility
-
-#### 4. Services (Business Logic Layer)
-
-- Implement core business logic
-- Enforce business rules and validations
-- Orchestrate repository calls
-- Handle complex operations
-
-#### 5. Repositories (Data Access Layer)
-
-- Abstract database operations
-- Provide clean interfaces for data access
-- Handle Mongoose queries and model operations
-- Ensure data consistency
-
-#### 6. MongoDB Database
-
-- Document-based storage
-- Collections: Users, Chats, Messages, RefreshTokens
-- Indexed for performance optimization
 
 ---
 
 ## Request Flow
 
-Detailed flow of an HTTP request through the application:
-
 ```
 Client Request
       │
       ▼
-┌────────────────────────────────────────────────────┐
-│                  Middleware Chain                  │
-│                                                    │
-│  1. Security (Helmet, CORS)                        │
-│  2. Request Parsing (JSON, URL-encoded)            │
-│  3. Request ID Generation                          │
-│  4. Input Sanitization (XSS Protection)            │
-│  5. Request Logging                                │
-│  6. Authentication (JWT Verification)              │
-│  7. Validation (express-validator)                 │
-└────────────────────────────────────────────────────┘
+┌─────────────────────────────────────────────┐
+│              Middleware Chain               │
+│  1. Helmet (security headers)               │
+│  2. CORS (origin validation)                │
+│  3. Body Parser (JSON / URL-encoded)        │
+│  4. Request ID (crypto.randomUUID)          │
+│  5. XSS Sanitization                        │
+│  6. Request Logger                          │
+│  7. JWT Verification (protected routes)     │
+│  8. Joi Schema Validation                   │
+└─────────────────────────────────────────────┘
       │
       ▼
-┌────────────────────────────────────────────────────┐
-│                    Controller                      │
-│  • Extracts request data                           │
-│  • Calls appropriate service method                │
-│  • Formats response using ApiResponse              │
-└────────────────────────────────────────────────────┘
+┌─────────────────────────────────────────────┐
+│                Controller                  │
+│  • Extracts validated fields from req       │
+│  • Calls one service method                 │
+│  • Wraps result in ApiResponse              │
+└─────────────────────────────────────────────┘
       │
       ▼
-┌────────────────────────────────────────────────────┐
-│                     Service                        │
-│  • Implements business logic                       │
-│  • Validates business rules                        │
-│  • Calls repository methods                        │
-│  • Handles errors (throws AppError instances)      │
-└────────────────────────────────────────────────────┘
+┌─────────────────────────────────────────────┐
+│                 Service                    │
+│  • Enforces business rules                  │
+│  • Calls one or more repositories           │
+│  • Throws typed AppError subclasses         │
+└─────────────────────────────────────────────┘
       │
       ▼
-┌────────────────────────────────────────────────────┐
-│                   Repository                       │
-│  • Interacts with MongoDB models                   │
-│  • Executes database queries                       │
-│  • Returns raw data                                │
-└────────────────────────────────────────────────────┘
+┌─────────────────────────────────────────────┐
+│               Repository                   │
+│  • Single database concern                  │
+│  • Returns raw DB rows / documents          │
+└─────────────────────────────────────────────┘
       │
       ▼
-┌────────────────────────────────────────────────────┐
-│                  MongoDB Database                  │
-└────────────────────────────────────────────────────┘
-      │
-      ▼
-Response sent back through the chain
+┌──────────┬──────────────┬─────────┐
+│PostgreSQL│   MongoDB    │  Redis  │
+└──────────┴──────────────┴─────────┘
+
+Error path: any thrown AppError is caught by
+asyncHandler and forwarded to the global error
+middleware, which serialises it to JSON.
 ```
 
-### Request Flow Example: Sending a Message
+### Example: Sending a Message
 
-1. **Client** sends POST request to `/api/v1/chats/:chatId/messages`
-2. **Middleware Chain** processes the request:
-   - Helmet adds security headers
-   - CORS validates origin
-   - Body parser parses JSON payload
-   - Request ID is generated
-   - XSS sanitization cleans input
-   - Logger records the request
-   - Auth middleware verifies JWT token
-   - Validator checks message content
-3. **Message Controller** receives validated request:
-   - Extracts `content` and `chatId`
-   - Calls `messageService.sendMessage()`
-4. **Message Service** executes business logic:
-   - Verifies chat exists (calls chatRepository)
-   - Verifies user is a participant
-   - Creates message object
-   - Calls `messageRepository.create()`
-5. **Message Repository** interacts with database:
-   - Creates new Message document in MongoDB
-   - Returns saved message
-6. **Response** flows back:
-   - Service formats the message
-   - Controller wraps in ApiResponse
-   - Middleware adds final headers
-   - Client receives JSON response
-7. **Socket.io** broadcasts message:
-   - Real-time event emitted to chat room
-   - All connected participants receive update
+1. `POST /api/v1/chats/:chatId/messages` enters the middleware chain.
+2. Auth middleware verifies the JWT and attaches `req.user`.
+3. Joi schema validates `{ content }` in the body and `:chatId` UUID in params.
+4. `MessageController.sendMessage` calls `messageService.sendMessage(...)`.
+5. Service fetches the chat from **MongoDB** to confirm it exists and the user is a participant.
+6. Service creates the message document in **MongoDB**.
+7. Controller emits `message:new` to the Socket.io room (`chatId`) so connected clients receive it in real-time.
+8. Controller responds with the new message wrapped in `ApiResponse`.
 
 ---
 
 ## Socket.io Real-time Architecture
 
-WebSocket connection lifecycle and event management:
-
 ```
-┌────────────────────────────────────────────────────┐
-│                  Client Connects                   │
-│          (with JWT in auth handshake)              │
-└────────────────────────────────────────────────────┘
-                        │
-                        ▼
-┌───────────────────────────────────────────────────┐
-│        Socket Authentication Middleware           │
-│  • Verify JWT token                               │
-│  • Attach userId to socket                        │
-└───────────────────────────────────────────────────┘
-                        │
-                        ▼
-┌────────────────────────────────────────────────────┐
-│               Connection Handler                   │
-│                                                    │
-│  1. Register event handlers (chat, message, typing)│
-│  2. Add socket to OnlineUsersService               │
-│  3. Broadcast user:online if first connection      │
-│  4. Push pending messages to user                  │
-└────────────────────────────────────────────────────┘
-                        │
-        ┌───────────────┼───────────────┐
-        ▼               ▼               ▼
-┌──────────────┐  ┌──────────────┐  ┌──────────────┐
-│Chat Handler  │  │Message       │  │Typing        │
-│              │  │Handler       │  │Handler       │
-│• chat:join   │  │• message:    │  │• typing:     │
-│• chat:leave  │  │  delivered   │  │  start       │
-│              │  │• message:    │  │• typing:     │
-│              │  │  read        │  │  stop        │
-└──────────────┘  └──────────────┘  └──────────────┘
-                        │
-                        ▼
-┌───────────────────────────────────────────────────┐
-│          Room-based Message Broadcasting          │
-│                                                   │
-│  socket.to(chatId).emit(event, data)              │
-│  • Only users in specific chat room receive events│
-└───────────────────────────────────────────────────┘
-                        │
-                        ▼
-┌───────────────────────────────────────────────────┐
-│                Disconnect Handler                 │
-│                                                   │
-│  1. Remove socket from OnlineUsersService         │
-│  2. Update user's lastSeen in database            │
-│  3. Broadcast user:offline if last connection     │
-└───────────────────────────────────────────────────┘
+Client connects (JWT in auth handshake)
+          │
+          ▼
+  Socket Auth Middleware
+  • verify JWT
+  • attach socket.userId
+          │
+          ▼
+  Connection Handler
+  • registerChatHandlers(io, socket)
+  • registerMessageHandlers(io, socket)
+  • registerTypingHandlers(io, socket)
+  • presenceService.addSocket(userId, socketId)
+    → if first connection: broadcast user:online
+          │
+          ▼
+  Event Handlers active (chat:join/leave,
+  message:delivered/read, typing start/stop)
+          │
+          ▼
+  Disconnect Handler
+  • presenceService.removeSocket(userId, socketId)
+    → if last connection: broadcast user:offline
 ```
 
-### Socket Event Flow
+### Presence via Redis
 
-#### User Joins a Chat
-
-```
-Client                    Server                    Other Clients
-  │                         │                         │
-  ├──chat:join─────────────►│                         │
-  │                         │                         │
-  │                         ├─ Add to room            │
-  │                         │                         │
-  │◄────────────────────────┤                         │
-  │  (joined successfully)  │                         │
-```
-
-#### Sending a Message
+The `PresenceService` stores each user's active socket IDs in a Redis Set:
 
 ```
-Client                    Server                    Other Clients
-  │                         │                         │
-  ├──HTTP POST message─────►│                         │
-  │                         │                         │
-  │                         ├─ Save to DB             │
-  │                         │                         │
-  │◄─HTTP Response──────────┤                         │
-  │                         │                         │
-  │                         ├──message:new───────────►│
-  │                         │  (broadcast to room)    │
+online:<userId>  →  Set { "socket1", "socket2", … }
 ```
 
-#### Online Status Updates
+- `addSocket` — SADD the socketId; if `SCARD` is now 1 → first connection.
+- `removeSocket` — SREM the socketId; if count was 1 → last connection.
 
-```
-User A                    Server                    User B
-  │                         │                         │
-  ├──connect (JWT)─────────►│                         │
-  │                         │                         │
-  │                         ├─ Add to OnlineUsers     │
-  │                         │                         │
-  │                         ├──user:online───────────►│
-  │                         │  (broadcast to all)     │
-```
-
-### OnlineUsersService
-
-In-memory service tracking connected users:
-
-```javascript
-{
-  "userId1": Set(["socket1", "socket2"]),  // Multiple devices
-  "userId2": Set(["socket3"]),             // Single device
-  "userId3": Set(["socket4", "socket5"])   // Multiple tabs
-}
-```
-
-**Features:**
-
-- Tracks multiple concurrent connections per user
-- Efficient Set data structure for socket management
-- First connection triggers `user:online` broadcast
-- Last disconnection triggers `user:offline` broadcast
+This approach correctly handles users connected from multiple tabs or devices.
 
 ---
 
-## Database Schema
+## Database Schemas
 
-Entity relationships and data model:
+### PostgreSQL — Users & Profiles
 
-```
-┌──────────────────┐
-│      User        │
-│──────────────────│
-│ _id (PK)         │◄────────┐
-│ username (unique)│         │
-│ email (unique)   │         │
-│ password (hashed)│         │
-│ role             │         │
-│ avatar           │         │
-│ bio              │         │
-│ lastSeen         │         │
-│ createdAt        │         │
-│ updatedAt        │         │
-└──────────────────┘         │
-         │                   │
-         │                   │
-         │ 1:N               │ N:1
-         │                   │
-         ▼                   │
-┌──────────────────┐         │
-│  RefreshToken    │         │
-│──────────────────│         │
-│ _id (PK)         │         │
-│ user (FK)        │─────────┘
-│ refreshToken     │
-│ createdAt (TTL)  │
-└──────────────────┘
+Two tables, linked 1:1.
 
-┌──────────────────┐         ┌──────────────────┐
-│      Chat        │         │     Message      │
-│──────────────────│         │──────────────────│
-│ _id (PK)         │◄────────│ chat (FK)        │
-│ type             │   N:1   │──────────────────│
-│ groupName        │         │ _id (PK)         │
-│ groupPicture     │         │ content          │
-│ participants[]   │───┐     │ sender (FK)      │──┐
-│ admin (FK)       │─┐ │     │ status           │  │
-│ createdAt        │ │ │     │ type             │  │
-│ updatedAt        │ │ │     │ file             │  │
-└──────────────────┘ │ │     │ createdAt        │  │
-         │           │ │     │ updatedAt        │  │
-         │ N:1       │ │     └──────────────────┘  │
-         └───────────┼─┼────────────────────────┬──┘
-                     │ │                        │
-                     │ │ N:M                    │ N:1
-                     │ └────────────────────────┼──┐
-                     │                          │  │
-                     │ 1:1 (admin)              │  │
-                     └──────────────────────────┼──┤
-                                                │  │
-                                                ▼  ▼
-                                         ┌──────────────────┐
-                                         │      User        │
-                                         │──────────────────│
-                                         │ _id (PK)         │
-                                         └──────────────────┘
-```
+**users**
 
-### Collections
+| Column          | Type          | Notes                   |
+| --------------- | ------------- | ----------------------- |
+| `id`            | `uuid`        | PK, `gen_random_uuid()` |
+| `username`      | `varchar(20)` | unique, min length 3    |
+| `email`         | `text`        | unique                  |
+| `password_hash` | `text`        | bcrypt hash             |
+| `role`          | `user_role`   | enum: `user`, `admin`   |
+| `created_at`    | `timestamp`   | default `now()`         |
+| `updated_at`    | `timestamp`   | default `now()`         |
 
-#### Users
+**profiles** (one-to-one with users, CASCADE delete)
+
+| Column                      | Type        | Notes                        |
+| --------------------------- | ----------- | ---------------------------- |
+| `id`                        | `uuid`      | PK                           |
+| `user_id`                   | `uuid`      | FK → users, unique           |
+| `avatar`                    | `text`      | nullable filename            |
+| `bio`                       | `text`      | nullable, max 200 chars      |
+| `last_seen`                 | `timestamp` | updated on socket disconnect |
+| `created_at` / `updated_at` | `timestamp` | —                            |
+
+A profile row is created automatically when a user signs up.
+
+### MongoDB — Chats
 
 ```javascript
 {
-  _id: ObjectId,
-  username: String (unique, indexed),
-  email: String (unique, indexed),
-  password: String (hashed, select: false),
-  role: String (enum: ['user', 'admin']),
-  avatar: String (optional),
-  bio: String (optional, max 200 chars),
-  lastSeen: Date (indexed),
+  _id: String,          // crypto.randomUUID()
+  type: String,         // 'private' | 'group'
+  groupName: String,    // required for groups
+  groupPicture: String, // optional
+  participants: [String], // array of user UUIDs (PostgreSQL IDs)
+  admin: String,        // user UUID, required for groups
   createdAt: Date,
   updatedAt: Date
 }
 ```
 
-#### Chats
+Indexes: `{ participants, createdAt }`, `{ participants, type }`, `{ admin }`
+
+Private chats must have exactly 2 participants. Group chats must have at least 2.
+
+### MongoDB — Messages
 
 ```javascript
 {
-  _id: ObjectId,
-  type: String (enum: ['private', 'group']),
-  groupName: String (required for groups),
-  groupPicture: String (optional),
-  participants: [ObjectId] (indexed, ref: User),
-  admin: ObjectId (ref: User, required for groups),
-  createdAt: Date,
-  updatedAt: Date
-}
-```
-
-**Indexes:**
-
-- `{ participants: 1, createdAt: -1 }`
-- `{ participants: 1, type: 1 }`
-- `{ admin: 1 }`
-
-#### Messages
-
-```javascript
-{
-  _id: ObjectId,
-  content: String (required for text messages),
-  status: String (enum: ['sent', 'delivered', 'read']),
-  sender: ObjectId (ref: User, indexed),
-  chat: ObjectId (ref: Chat, indexed),
-  type: String (enum: ['text', 'file']),
-  file: {
+  _id: String,    // crypto.randomUUID()
+  content: String,  // required for type 'text'
+  status: String,   // 'sent' | 'delivered' | 'read'
+  sender: String,   // user UUID
+  chat: String,     // chat _id
+  type: String,     // 'text' | 'file'
+  file: {           // required for type 'file'
     url: String,
     filename: String,
-    mimetype: String
-  } (required for file messages),
-  createdAt: Date (indexed),
+    mimetype: String,
+  },
+  createdAt: Date,
   updatedAt: Date
 }
 ```
 
-**Indexes:**
+Indexes: `{ chat, createdAt }`, `{ sender, createdAt }`, `{ status, chat }`
 
-- `{ chat: 1, createdAt: -1 }`
-- `{ sender: 1, createdAt: -1 }`
-- `{ status: 1, chat: 1 }`
+### Redis — Refresh Tokens
 
-#### RefreshTokens
-
-```javascript
-{
-  _id: ObjectId,
-  user: ObjectId (ref: User, indexed),
-  refreshToken: String,
-  createdAt: Date (TTL index, auto-expires after 7 days)
-}
+```
+Key:   rt:<opaqueToken>
+Value: <userId>
+TTL:   REFRESH_TOKEN_TTL (e.g. 7 days in seconds)
 ```
 
-**Indexes:**
+Stored as plain string KV pairs via `SET … EX`. On logout or rotation the key is deleted with `DEL`.
 
-- `{ user: 1, refreshToken: 1 }`
-- TTL index on `createdAt` (expires after JWT_REFRESH_EXPIRES)
+### Redis — Presence
+
+```
+Key:   online:<userId>
+Value: Redis Set of active socketIds
+TTL:   none (managed explicitly by connect/disconnect handlers)
+```
 
 ---
 
 ## Design Patterns
 
-### 1. Repository Pattern
+### Repository Pattern
 
-Abstracts data access logic from business logic.
-
-```
-Service Layer          Repository Layer        Database
-     │                        │                      │
-     ├─findUserById()────────►├─findById()──────────►│
-     │                        │                      │
-     ├─createChat()──────────►├─create()────────────►│
-     │                        │                      │
-     ├─updateMessage()───────►├─findByIdAndUpdate()─►│
-```
-
-**Benefits:**
-
-- Centralized data access logic
-- Easy to test (can mock repositories)
-- Consistent query patterns
-- Decouples business logic from database implementation
-
-### 2. Service Layer Pattern
-
-Encapsulates business logic and orchestrates operations.
+Each database concern is wrapped in a repository class that exposes a domain-oriented interface. Services never import DB clients directly.
 
 ```
-Controller ──► Service ──► Repository ──► Database
-                  │
-                  ├─ Business Rules
-                  ├─ Validation
-                  ├─ Error Handling
-                  └─ Data Transformation
+UserRepository   → PostgreSQL pool queries
+ChatRepository   → Mongoose Model methods
+MessageRepository → Mongoose Model methods
+TokenRepository  → ioredis client
 ```
 
-**Benefits:**
+### Service Layer
 
-- Reusable business logic
-- Single responsibility
-- Easier to unit test
-- Clear separation of concerns
+All business rules live in services. Controllers are intentionally thin — they extract request data, call one service method, and format the response.
 
-### 3. Middleware Chain Pattern
+### asyncHandler Wrapper
 
-Sequential processing of requests through middleware functions.
+Every async route handler is wrapped so that thrown errors are forwarded to the global error middleware via `next(err)` rather than crashing the process.
 
-```
-Request
-   │
-   ├─► Helmet (Security Headers)
-   │
-   ├─► CORS (Origin Validation)
-   │
-   ├─► Body Parser (Parse JSON)
-   │
-   ├─► Request ID (UUID Generation)
-   │
-   ├─► Sanitization (XSS Prevention)
-   │
-   ├─► Logger (Request Logging)
-   │
-   ├─► Authentication (JWT Verification)
-   │
-   ├─► Validation (Input Validation)
-   │
-   └─► Route Handler
-```
-
-### 4. Error Handling Pattern
-
-Centralized error handling with custom error types.
-
-```javascript
-// Custom error classes
-class AppError extends Error {
-  constructor(message, status, operational = true)
-}
-
-class ValidationError extends AppError { }
-class AuthError extends AppError { }
-class NotFoundError extends AppError { }
-
-// Global error handler
-app.use((err, req, res, next) => {
-  // Log error
-  // Format response
-  // Send to client
-})
-```
-
-**Error Flow:**
+### Custom Error Hierarchy
 
 ```
-Service throws error
-       │
-       ▼
-asyncHandler catches
-       │
-       ▼
-Global error handler
-       │
-       ▼
-Formatted JSON response
+AppError (base, isOperational = true)
+  ├── ValidationError      400  VALIDATION_FAILED
+  ├── AuthenticationError  401  UNAUTHORIZED / INVALID_TOKEN / …
+  ├── AuthorizationError   403  FORBIDDEN
+  ├── NotFoundError        404  NOT_FOUND
+  ├── ConflictError        409  CONFLICT
+  ├── PayloadTooLargeError 413  PAYLOAD_TOO_LARGE
+  ├── RateLimitError       429  TOO_MANY_REQUESTS
+  └── UnsupportedMediaTypeError 415
 ```
 
-### 5. Singleton Pattern
+Operational errors produce a structured JSON response with a `code` field. Non-operational errors (programming bugs) produce a generic `INTERNAL_SERVER_ERROR` in production.
 
-Used for shared services and resources.
+### Singleton Services
 
-```javascript
-// Socket.io server (singleton)
-class SocketServer {
-  constructor() {
-    this.io = null
-  }
-
-  init(server) {
-    this.io = new Server(server)
-    return this.io
-  }
-
-  get() {
-    if (!this.io) throw new Error('Socket not initialized')
-    return this.io
-  }
-}
-
-module.exports = new SocketServer()
-```
-
-**Examples in codebase:**
-
-- `socketServer` (Socket.io instance)
-- `onlineUsersService` (Online user tracking)
-- Repository instances
-- Service instances
-
-### 6. Factory Pattern
-
-Used for creating consistent response objects.
-
-```javascript
-class ApiResponse {
-  constructor(message, data = null, status = 200) {
-    this.success = true
-    this.message = message
-    this.timestamp = new Date().toISOString()
-    this.data = data
-  }
-}
-```
+`presenceService`, `tokenService`, and all repository instances are module-level singletons, exported as plain objects. The Socket.io server instance is exposed via a Proxy that throws if accessed before `init()` is called.
 
 ---
 
-## Project Structure
+## Graceful Shutdown
 
-```
-fastchat/
-├── src/
-│   ├── config/          # Configuration and setup
-│   ├── controllers/     # Request handlers
-│   ├── middlewares/     # Express middleware
-│   ├── models/          # Mongoose schemas
-│   ├── repositories/    # Data access layer
-│   ├── routes/          # API routes
-│   ├── services/        # Business logic
-│   ├── sockets/         # Socket.io implementation
-│   └── utils/           # Helper functions
-├── tests/               # Test suites
-├── uploads/             # User-uploaded files
-├── logs/                # Application logs
-└── docs/                # Documentation
-```
+`server.js` registers handlers for `SIGTERM` and `SIGINT`. On signal:
+
+1. Closes the Socket.io server and HTTP server (stops accepting new connections).
+2. Disconnects MongoDB, closes the PostgreSQL pool, and quits Redis.
+3. Exits with code `0`.
+
+A 10-second forced-exit timeout is set to handle hung connections.
+
+---
 
 ## See Also
 
-- [Testing Guide](TESTING.md) - Testing architecture and strategies
-- [REST API Reference](API_REST.md) - Complete API documentation
-- [WebSocket API](API_WEBSOCKET.md) - Real-time communication details
+- [REST API Reference](API_REST.md)
+- [WebSocket API](API_WEBSOCKET.md)
+- [Testing Guide](TESTING.md)
+- [Quick Start Guide](QUICKSTART.md)

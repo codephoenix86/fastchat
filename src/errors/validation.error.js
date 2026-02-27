@@ -4,7 +4,7 @@ const AppError = require('./app.error')
  * Validation error (400)
  */
 class ValidationError extends AppError {
-  constructor(message, errors = undefined, code = 'BAD_REQUEST') {
+  constructor(message, code = 'BAD_REQUEST', errors = undefined) {
     super(message, StatusCodes.BAD_REQUEST)
     this.code = code
     this.errors = errors

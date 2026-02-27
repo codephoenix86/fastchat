@@ -3,41 +3,21 @@ const path = require('path')
 const fs = require('fs').promises
 const { userRepository } = require('@repositories')
 const { logger } = require('@config')
-const { NotFoundError, AuthenticationError, ConflictError } = require('@errors')
+const { NotFoundError, AuthenticationError } = require('@errors')
 
 class UserService {
   /**
    * Create a new user
    */
   async createUser(userData) {
-    try {
-      const user = await userRepository.create(userData)
-      logger.info('User created successfully', { userId: user._id })
-      return this.formatUser(user)
-    } catch (err) {
-      if (err.code === 11000) {
-        logger.error('Failed to create user:', {
-          error: err.message,
-          stack: err.stack,
-          name: err.name,
-        })
-        if (err.keyPattern.email) {
-          throw new ConflictError(
-            'This email address is already registered. Please log in instead.',
-            'EMAIL_ALREADY_EXISTS'
-          )
-        }
-        if (err.keyPattern.username) {
-          throw new ConflictError(
-            'That username is already taken. Please try another one.',
-            'USERNAME_ALREADY_TAKEN'
-          )
-        }
-      }
-      throw err
-    }
+    const user = await userRepository.create(userData)
+    logger.info('User created successfully', { userId: user.id })
+    return this.formatUser(user)
   }
-
+  async getUserByIdentifier(identifier) {
+    const user = await userRepository.findByEmailOrUsername(identifier)
+    return user
+  }
   /**
    * Find all users with pagination, filtering, and sorting
    * @param {Object} options - { filter, skip, limit, sort, search }
@@ -45,22 +25,11 @@ class UserService {
   async findAllUsers(options = {}) {
     const { filter = {}, skip = 0, limit = 20, sort = { createdAt: -1 }, search } = options
 
-    // Build query filter
-    const query = { ...filter }
-
-    // Add search functionality
-    if (search) {
-      query.$or = [
-        { username: { $regex: search, $options: 'i' } },
-        { email: { $regex: search, $options: 'i' } },
-      ]
-    }
-
     // Get total count for pagination
-    const total = await userRepository.countDocuments(query)
+    const total = await userRepository.countDocuments(filter, search)
 
     // Get users with pagination
-    const users = await userRepository.findAll(query, { skip, limit, sort })
+    const users = await userRepository.findAll(search, filter, { skip, limit, sort })
 
     return {
       users: users.map((user) => this.formatUser(user)),
@@ -82,49 +51,14 @@ class UserService {
   /**
    * Update user
    */
-  async updateUser(userId, updateData, oldPassword = null) {
-    const user = await userRepository.findByIdWithPassword(userId)
+  async updateUser(userId, updateData) {
+    const user = await userRepository.findById(userId)
     if (!user) {
       throw new NotFoundError('User not found')
     }
-
-    // Verify old password if changing email or password
-    if ((updateData.email || updateData.password) && oldPassword) {
-      const isValid = await bcrypt.compare(oldPassword, user.password)
-      if (!isValid) {
-        throw new AuthenticationError('The password provided is incorrect', 'INVALID_PASSWORD')
-      }
-    }
-
-    try {
-      const updated = await userRepository.findByIdAndUpdate(userId, updateData, {
-        runValidators: true,
-      })
-
-      logger.info('User updated successfully', { userId })
-      return this.formatUser(updated)
-    } catch (err) {
-      if (err.code === 11000) {
-        logger.error('Failed to update user:', {
-          error: err.message,
-          stack: err.stack,
-          name: err.name,
-        })
-        if (err.keyPattern.email) {
-          throw new ConflictError(
-            'This email address is already registered. Please log in instead.',
-            'EMAIL_ALREADY_EXISTS'
-          )
-        }
-        if (err.keyPattern.username) {
-          throw new ConflictError(
-            'That username is already taken. Please try another one.',
-            'USERNAME_ALREADY_TAKEN'
-          )
-        }
-      }
-      throw err
-    }
+    const updatedUser = await userRepository.updateById(userId, updateData)
+    logger.info('User updated successfully', { userId })
+    return this.formatUser(updatedUser)
   }
 
   /**
@@ -151,8 +85,9 @@ class UserService {
       }
     }
 
-    await userRepository.findByIdAndDelete(userId)
+    const deleted = await userRepository.findByIdAndDelete(userId)
     logger.info('User deleted successfully', { userId })
+    return this.formatUser(deleted)
   }
 
   /**
@@ -186,9 +121,8 @@ class UserService {
       updated = await userRepository.deleteAvatar(userId)
     } else {
       // Set new avatar filename
-      updated = await userRepository.findByIdAndUpdate(userId, { avatar: filename })
+      updated = await userRepository.updateById(userId, { avatar: filename })
     }
-
     logger.info('User avatar updated', { userId, filename })
     return this.formatUser(updated)
   }
@@ -196,21 +130,20 @@ class UserService {
   /**
    * Change user password
    */
-  async changePassword(userId, oldPassword, newPassword) {
+  async changePassword(userId, currentPassword, newPassword) {
     const user = await userRepository.findByIdWithPassword(userId)
     if (!user) {
       throw new NotFoundError('User not found')
     }
 
     // Verify old password
-    const isValid = await bcrypt.compare(oldPassword, user.password)
-    if (!isValid) {
+    const match = await bcrypt.compare(currentPassword, user.password_hash)
+    if (!match) {
       throw new AuthenticationError('The password provided is incorrect', 'INVALID_PASSWORD')
     }
 
-    // Update password (will be hashed by pre-save hook)
-    user.password = newPassword
-    await user.save()
+    const password_hash = await bcrypt.hash(newPassword, 10)
+    await userRepository.updateById(userId, { password_hash })
 
     logger.info('Password changed successfully', { userId })
   }
@@ -224,15 +157,15 @@ class UserService {
     }
 
     return {
-      id: user._id,
+      id: user.id,
       username: user.username,
       email: user.email,
       role: user.role,
-      avatar: user.avatar,
-      bio: user.bio,
-      lastSeen: user.lastSeen,
-      createdAt: user.createdAt,
-      updatedAt: user.updatedAt,
+      avatar: user.avatar || undefined,
+      bio: user.bio || undefined,
+      lastSeen: user.last_seen || undefined,
+      createdAt: user.created_at,
+      updatedAt: user.updated_at || undefined,
     }
   }
 }

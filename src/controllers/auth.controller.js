@@ -23,15 +23,15 @@ exports.login = async (req, res) => {
 exports.logout = async (req, res) => {
   const { refresh_token } = req.body
 
-  await authService.logout(req.user.id, refresh_token)
+  await authService.logout(refresh_token)
 
   res.status(StatusCodes.OK).json(new ApiResponse('User logged out successfully'))
 }
 
-exports.refreshToken = async (req, res) => {
+exports.refreshSession = async (req, res) => {
   const { refresh_token } = req.body
 
-  const tokens = await authService.refreshAccessToken(refresh_token, req.user)
+  const tokens = await authService.refreshSession(refresh_token, req.user)
 
   res.status(StatusCodes.OK).json(new ApiResponse('Tokens refreshed successfully', tokens))
 }

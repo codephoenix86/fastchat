@@ -1,0 +1,55 @@
+const Joi = require('joi')
+const { paramUuid } = require('./common.schema')
+
+const contentSchema = Joi.string().trim().max(5000).required().messages({
+  'any.required': 'Message content is required',
+  'string.base': 'Message content must be text',
+  'string.empty': 'Message content cannot be empty',
+  'string.max': 'Message content must not exceed 5000 characters',
+})
+
+const sendMessage = Joi.object({
+  params: Joi.object({
+    chatId: paramUuid('Chat ID'),
+  }),
+  body: Joi.object({
+    content: contentSchema,
+  })
+    .required()
+    .min(1)
+    .messages({
+      'any.required': 'Request body is missing. Please provide data to update.',
+      'object.min': 'Request body cannot be empty. Please provide at least one field to update.',
+    }),
+})
+
+const updateMessage = Joi.object({
+  params: Joi.object({
+    messageId: paramUuid('message ID'),
+  }),
+  body: Joi.object({
+    content: contentSchema,
+  })
+    .required()
+    .min(1)
+    .messages({
+      'any.required': 'Request body is missing. Please provide data to update.',
+      'object.min': 'Request body cannot be empty. Please provide at least one field to update.',
+    }),
+})
+
+const getMessageById = Joi.object({
+  params: Joi.object({
+    chatId: paramUuid('Chat ID'),
+    messageId: paramUuid('Message ID'),
+  }),
+})
+
+const deleteMessage = Joi.object({
+  params: Joi.object({
+    chatId: paramUuid('Chat ID'),
+    messageId: paramUuid('Message ID'),
+  }),
+})
+
+module.exports = { sendMessage, updateMessage, getMessageById, deleteMessage }

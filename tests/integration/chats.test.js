@@ -1,8 +1,7 @@
+const crypto = require('crypto')
 const request = require('supertest')
-const {
-  db: { clearDatabase },
-} = require('@tests/helpers')
 const app = require('@/app')
+const { connectTestDB, clearTestDB, disconnectTestDB } = require('@tests/helpers')
 const {
   createTestUser,
   createTestUsers,
@@ -15,8 +14,16 @@ const { CHAT_TYPES } = require('@constants')
 const { StatusCodes } = require('http-status-codes')
 
 describe('Chats API', () => {
+  beforeAll(async () => {
+    await connectTestDB()
+  })
+
   beforeEach(async () => {
-    await clearDatabase()
+    await clearTestDB()
+  })
+
+  afterAll(async () => {
+    await disconnectTestDB()
   })
 
   describe('POST /api/v1/chats', () => {
@@ -28,7 +35,7 @@ describe('Chats API', () => {
         .set('Authorization', `Bearer ${user1.tokens.accessToken}`)
         .send({
           type: CHAT_TYPES.PRIVATE,
-          participants: [user2.user._id.toString()],
+          participants: [user2.user.id],
         })
 
       expectSuccess(response, StatusCodes.CREATED, 'Chat created successfully')
@@ -45,13 +52,13 @@ describe('Chats API', () => {
         .send({
           type: CHAT_TYPES.GROUP,
           groupName: 'Test Group',
-          participants: [user2.user._id.toString(), user3.user._id.toString()],
+          participants: [user2.user.id, user3.user.id],
         })
 
       expectSuccess(response, StatusCodes.CREATED)
       expect(response.body.data.chat.type).toBe(CHAT_TYPES.GROUP)
       expect(response.body.data.chat.name).toBe('Test Group')
-      expect(response.body.data.chat.admin).toBe(user1.user._id.toString())
+      expect(response.body.data.chat.admin).toBe(user1.user.id)
       expect(response.body.data.chat.participants).toHaveLength(3)
     })
 
@@ -63,7 +70,7 @@ describe('Chats API', () => {
         .set('Authorization', `Bearer ${user1.tokens.accessToken}`)
         .send({
           type: CHAT_TYPES.GROUP,
-          participants: [user2.user._id.toString()],
+          participants: [user2.user.id],
         })
 
       expectError(response, StatusCodes.BAD_REQUEST, 'VALIDATION_FAILED')
@@ -77,7 +84,7 @@ describe('Chats API', () => {
         .set('Authorization', `Bearer ${user1.tokens.accessToken}`)
         .send({
           type: 'invalid',
-          participants: [user2.user._id.toString()],
+          participants: [user2.user.id],
         })
 
       expectError(response, StatusCodes.BAD_REQUEST, 'VALIDATION_FAILED')
@@ -91,7 +98,7 @@ describe('Chats API', () => {
         .set('Authorization', `Bearer ${user1.tokens.accessToken}`)
         .send({
           type: CHAT_TYPES.PRIVATE,
-          participants: [user2.user._id.toString(), user3.user._id.toString()],
+          participants: [user2.user.id, user3.user.id],
         })
 
       expectError(response, StatusCodes.BAD_REQUEST, 'VALIDATION_FAILED')
@@ -121,7 +128,7 @@ describe('Chats API', () => {
         .send({
           type: CHAT_TYPES.GROUP,
           groupName: 'Test',
-          participants: [user2.user._id.toString(), user2.user._id.toString()],
+          participants: [user2.user.id, user2.user.id],
         })
 
       expectError(response, StatusCodes.BAD_REQUEST, 'VALIDATION_FAILED')
@@ -239,9 +246,9 @@ describe('Chats API', () => {
 
     it('should return 404 for non-existent chat', async () => {
       const user = await createTestUser()
-
+      const chatId = crypto.randomUUID()
       const response = await request(app)
-        .get('/api/v1/chats/507f1f77bcf86cd799439011')
+        .get(`/api/v1/chats/${chatId}`)
         .set('Authorization', `Bearer ${user.tokens.accessToken}`)
 
       expectError(response, StatusCodes.NOT_FOUND, 'NOT_FOUND')
@@ -265,7 +272,7 @@ describe('Chats API', () => {
         .get('/api/v1/chats/invalid-id')
         .set('Authorization', `Bearer ${user.tokens.accessToken}`)
 
-      expectError(response, StatusCodes.BAD_REQUEST, 'BAD_REQUEST')
+      expectError(response, StatusCodes.BAD_REQUEST, 'VALIDATION_FAILED')
     })
   })
 
@@ -288,7 +295,7 @@ describe('Chats API', () => {
 
     it('should transfer admin rights', async () => {
       const [user1, user2] = await createTestUsers(2)
-      const chat = await createTestChat(user1.user, [user2.user._id], {
+      const chat = await createTestChat(user1.user, [user2.user.id], {
         type: CHAT_TYPES.GROUP,
         groupName: 'Test',
       })
@@ -296,10 +303,10 @@ describe('Chats API', () => {
       const response = await request(app)
         .patch(`/api/v1/chats/${chat._id}`)
         .set('Authorization', `Bearer ${user1.tokens.accessToken}`)
-        .send({ admin: user2.user._id.toString() })
+        .send({ admin: user2.user.id })
 
       expectSuccess(response, StatusCodes.OK)
-      expect(response.body.data.chat.admin).toBe(user2.user._id.toString())
+      expect(response.body.data.chat.admin).toBe(user2.user.id)
     })
 
     it('should return 400 for private chat', async () => {
@@ -311,7 +318,7 @@ describe('Chats API', () => {
         .set('Authorization', `Bearer ${user1.tokens.accessToken}`)
         .send({ groupName: 'New Name' })
 
-      expectError(response, StatusCodes.BAD_REQUEST, 'VALIDATION_FAILED')
+      expectError(response, StatusCodes.BAD_REQUEST, 'INVALID_CHAT_TYPE')
     })
 
     it('should return 403 when non-admin tries to update', async () => {
@@ -339,9 +346,9 @@ describe('Chats API', () => {
       const response = await request(app)
         .patch(`/api/v1/chats/${chat._id}`)
         .set('Authorization', `Bearer ${user1.tokens.accessToken}`)
-        .send({ admin: user3.user._id.toString() })
+        .send({ admin: user3.user.id })
 
-      expectError(response, StatusCodes.BAD_REQUEST, 'VALIDATION_FAILED')
+      expectError(response, StatusCodes.BAD_REQUEST, 'NOT_A_MEMBER')
     })
 
     it('should return 400 when no fields are provided', async () => {
@@ -386,7 +393,7 @@ describe('Chats API', () => {
         .delete(`/api/v1/chats/${chat._id}`)
         .set('Authorization', `Bearer ${user1.tokens.accessToken}`)
 
-      expectError(response, StatusCodes.BAD_REQUEST, 'VALIDATION_FAILED')
+      expectError(response, StatusCodes.BAD_REQUEST, 'INVALID_CHAT_TYPE')
     })
 
     it('should return 403 when non-admin tries to delete', async () => {
@@ -407,7 +414,7 @@ describe('Chats API', () => {
   describe('GET /api/v1/chats/:chatId/members', () => {
     it('should get chat members', async () => {
       const [user1, user2, user3] = await createTestUsers(3)
-      const chat = await createTestChat(user1.user, [user2.user._id, user3.user._id], {
+      const chat = await createTestChat(user1.user, [user2.user.id, user3.user.id], {
         type: CHAT_TYPES.GROUP,
         groupName: 'Test',
       })
@@ -442,26 +449,24 @@ describe('Chats API', () => {
       })
 
       const response = await request(app)
-        .post(`/api/v1/chats/${chat._id}/members`)
+        .post(`/api/v1/chats/${chat._id}/members/${user3.user.id}`)
         .set('Authorization', `Bearer ${user1.tokens.accessToken}`)
-        .send({ userId: user3.user._id.toString() })
 
       expectSuccess(response, StatusCodes.OK, 'Member added successfully')
     })
 
-    it('should allow user to add themselves', async () => {
+    it('should not allow user to add themselves', async () => {
       const [user1, user2, user3] = await createTestUsers(3)
-      const chat = await createTestChat(user1.user, [user2.user._id], {
+      const chat = await createTestChat(user1.user, [user2.user.id], {
         type: CHAT_TYPES.GROUP,
         groupName: 'Test',
       })
 
       const response = await request(app)
-        .post(`/api/v1/chats/${chat._id}/members`)
+        .post(`/api/v1/chats/${chat._id}/members/${user3.user.id}`)
         .set('Authorization', `Bearer ${user3.tokens.accessToken}`)
-        .send({})
 
-      expectSuccess(response, StatusCodes.OK)
+      expectError(response, StatusCodes.FORBIDDEN, 'ADMIN_REQUIRED')
     })
 
     it('should return 400 for private chat', async () => {
@@ -469,11 +474,10 @@ describe('Chats API', () => {
       const chat = await createTestChat(user1.user, [user2.user._id])
 
       const response = await request(app)
-        .post(`/api/v1/chats/${chat._id}/members`)
+        .post(`/api/v1/chats/${chat._id}/members/${user3.user.id}`)
         .set('Authorization', `Bearer ${user1.tokens.accessToken}`)
-        .send({ userId: user3.user._id.toString() })
 
-      expectError(response, StatusCodes.BAD_REQUEST, 'VALIDATION_FAILED')
+      expectError(response, StatusCodes.BAD_REQUEST, 'INVALID_CHAT_TYPE')
     })
 
     it('should return 403 when non-admin tries to add others', async () => {
@@ -484,24 +488,22 @@ describe('Chats API', () => {
       })
 
       const response = await request(app)
-        .post(`/api/v1/chats/${chat._id}/members`)
+        .post(`/api/v1/chats/${chat._id}/members/${user3.user.id}`)
         .set('Authorization', `Bearer ${user2.tokens.accessToken}`)
-        .send({ userId: user3.user._id.toString() })
 
       expectError(response, StatusCodes.FORBIDDEN, 'ADMIN_REQUIRED')
     })
 
     it('should return 409 when member already exists', async () => {
       const [user1, user2] = await createTestUsers(2)
-      const chat = await createTestChat(user1.user, [user2.user._id], {
+      const chat = await createTestChat(user1.user, [user2.user.id], {
         type: CHAT_TYPES.GROUP,
         groupName: 'Test',
       })
 
       const response = await request(app)
-        .post(`/api/v1/chats/${chat._id}/members`)
+        .post(`/api/v1/chats/${chat._id}/members/${user2.user.id}`)
         .set('Authorization', `Bearer ${user1.tokens.accessToken}`)
-        .send({ userId: user2.user._id.toString() })
 
       expectError(response, StatusCodes.CONFLICT, 'ALREADY_MEMBER')
     })
@@ -510,7 +512,7 @@ describe('Chats API', () => {
   describe('DELETE /api/v1/chats/:chatId/members/:userId', () => {
     it('should allow user to remove themselves', async () => {
       const [user1, user2] = await createTestUsers(2)
-      const chat = await createTestChat(user1.user, [user2.user._id], {
+      const chat = await createTestChat(user1.user, [user2.user.id], {
         type: CHAT_TYPES.GROUP,
         groupName: 'Test',
       })
@@ -524,13 +526,13 @@ describe('Chats API', () => {
 
     it('should allow admin to remove others', async () => {
       const [user1, user2] = await createTestUsers(2)
-      const chat = await createTestChat(user1.user, [user2.user._id], {
+      const chat = await createTestChat(user1.user, [user2.user.id], {
         type: CHAT_TYPES.GROUP,
         groupName: 'Test',
       })
 
       const response = await request(app)
-        .delete(`/api/v1/chats/${chat._id}/members/${user2.user._id}`)
+        .delete(`/api/v1/chats/${chat._id}/members/${user2.user.id}`)
         .set('Authorization', `Bearer ${user1.tokens.accessToken}`)
 
       expectSuccess(response, StatusCodes.OK)
@@ -538,13 +540,13 @@ describe('Chats API', () => {
 
     it('should return 403 when non-admin tries to remove others', async () => {
       const [user1, user2, user3] = await createTestUsers(3)
-      const chat = await createTestChat(user1.user, [user2.user._id, user3.user._id], {
+      const chat = await createTestChat(user1.user, [user2.user.id, user3.user.id], {
         type: CHAT_TYPES.GROUP,
         groupName: 'Test',
       })
 
       const response = await request(app)
-        .delete(`/api/v1/chats/${chat._id}/members/${user3.user._id}`)
+        .delete(`/api/v1/chats/${chat._id}/members/${user3.user.id}`)
         .set('Authorization', `Bearer ${user2.tokens.accessToken}`)
 
       expectError(response, StatusCodes.FORBIDDEN, 'ADMIN_REQUIRED')
@@ -566,7 +568,7 @@ describe('Chats API', () => {
 
     it('should delete chat when last member leaves', async () => {
       const [user1, user2] = await createTestUsers(2)
-      const chat = await createTestChat(user1.user, [user2.user._id], {
+      const chat = await createTestChat(user1.user, [user2.user.id], {
         type: CHAT_TYPES.GROUP,
         groupName: 'Test',
       })
@@ -575,7 +577,7 @@ describe('Chats API', () => {
       await request(app)
         .patch(`/api/v1/chats/${chat._id}`)
         .set('Authorization', `Bearer ${user1.tokens.accessToken}`)
-        .send({ admin: user2.user._id.toString() })
+        .send({ admin: user2.user.id })
 
       // User1 leaves
       await request(app)
@@ -602,7 +604,7 @@ describe('Chats API', () => {
         .delete(`/api/v1/chats/${chat._id}/members/me`)
         .set('Authorization', `Bearer ${user1.tokens.accessToken}`)
 
-      expectError(response, StatusCodes.BAD_REQUEST, 'VALIDATION_FAILED')
+      expectError(response, StatusCodes.BAD_REQUEST, 'INVALID_CHAT_TYPE')
     })
   })
 })

@@ -1,0 +1,37 @@
+# Dependencies
+node_modules
+
+# Git & Local Configs
+.git
+.gitignore
+.gitattributes
+.husky
+.editorconfig
+
+# Environment Variables (Critical for Security)
+.env.*
+
+# Testing & Quality
+coverage
+tests
+jest.config.js
+eslint.config.js
+
+# Logs & Debugging
+logs
+npm-debug.log
+yarn-error.log
+
+# Documentation & Assets
+docs
+README.md
+LICENSE
+*.md
+
+# Data & Migrations
+uploads
+
+# Docker Build Files
+Dockerfile
+.dockerignore
+compose.yml

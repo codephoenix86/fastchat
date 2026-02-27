@@ -1,46 +1,36 @@
 const express = require('express')
 const { userControllers } = require('@controllers')
-const { auth, upload, validators, validate, param } = require('@middlewares')
+const { userSchema } = require('@schemas')
+const { protect, upload, validate } = require('@middlewares')
 const { asyncHandler } = require('@utils')
 
 const router = express.Router()
 
+// Public routes
+router.get('/', asyncHandler(userControllers.getUsers))
+
 // Protected routes - Current user
+router.use('/me', asyncHandler(protect.accessToken))
+
 router
   .route('/me')
-  .get(asyncHandler(auth.accessToken), asyncHandler(userControllers.getCurrentUser))
-  .patch(
-    validators.user.update,
-    validate,
-    asyncHandler(auth.accessToken),
-    asyncHandler(userControllers.updateCurrentUser)
-  )
-  .delete(asyncHandler(auth.accessToken), asyncHandler(userControllers.deleteCurrentUser))
+  .get(asyncHandler(userControllers.getCurrentUser))
+  .patch(validate(userSchema.updateCurrentUser), asyncHandler(userControllers.updateCurrentUser))
+  .delete(asyncHandler(userControllers.deleteCurrentUser))
 
 // Avatar as sub-resource
 router
   .route('/me/avatar')
-  .post(
-    asyncHandler(auth.accessToken),
-    upload.single('avatar'),
-    asyncHandler(userControllers.uploadAvatar)
-  )
-  .delete(asyncHandler(auth.accessToken), asyncHandler(userControllers.deleteAvatar))
+  .post(upload.single('avatar'), asyncHandler(userControllers.uploadAvatar))
+  .delete(asyncHandler(userControllers.deleteAvatar))
 
 // Password management
 router.patch(
   '/me/password',
-  validators.user.changePassword,
-  validate,
-  asyncHandler(auth.accessToken),
+  validate(userSchema.changePassword),
   asyncHandler(userControllers.changePassword)
 )
 
-// Parameterized routes
-router.param('id', param.validateId('user'))
-
-// Public routes
-router.get('/', asyncHandler(userControllers.getUsers))
-router.get('/:id', asyncHandler(userControllers.getUserById))
+router.get('/:userId', validate(userSchema.getUserById), asyncHandler(userControllers.getUserById))
 
 module.exports = router
