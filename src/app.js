@@ -5,6 +5,9 @@ const helmet = require('helmet')
 const crypto = require('crypto')
 const app = express()
 
+app.set('trust proxy', true)
+app.set('trust proxy', 1)
+
 const routes = require('@routes')
 const { handleError, sanitize } = require('@middlewares')
 const { logger, env } = require('@config')

@@ -9,10 +9,9 @@ services:
         condition: service_healthy
       redis:
         condition: service_healthy
-    ports:
-      - "3000:3000"
     networks:
       - fastchat
+      - shared-gateway
     environment:
       - PORT=${PORT:-3000}
       - NODE_ENV=${NODE_ENV:-development}
@@ -20,7 +19,7 @@ services:
       - MONGODB_URI=${MONGODB_URI:-mongodb://mongo:mongopassword@mongodb:27017/fastchat?authSource=admin}
       - POSTGRES_URI=${POSTGRES_URI:-postgresql://postgres:postgrespassword@postgres:5432/fastchat}
       - REDIS_URI=${REDIS_URI:-redis://:redispassword@redis:6379}
-      - ACCESS_TOKEN_SECRET=${ACCESS_TOKEN_SECRET}
+      - ACCESS_TOKEN_SECRET=${ACCESS_TOKEN_SECRET:-p9&K#2mZ!vR5*qN8^wX0(bY4@zL7_jT1}
       - ACCESS_TOKEN_TTL=${ACCESS_TOKEN_TTL:-15m}
       - REFRESH_TOKEN_TTL=${REFRESH_TOKEN_TTL:-7d}
       - MAX_FILE_SIZE=${MAX_FILE_SIZE:-5242880}
@@ -28,8 +27,6 @@ services:
   mongodb:
     image: mongo:7.0
     container_name: my-mongo
-    ports:
-      - "27017:27017"
     environment:
       - MONGO_INITDB_ROOT_USERNAME=${MONGO_USER:-mongo}
       - MONGO_INITDB_ROOT_PASSWORD=${MONG_PASSWORD:-mongopassword}
@@ -45,8 +42,6 @@ services:
   postgres:
     image: postgres:16-alpine
     container_name: my-postgres
-    ports:
-      - "5432:5432"
     environment:
       - POSTGRES_USER=${POSTGRES_USER:-postgres}
       - POSTGRES_PASSWORD=${POSTGRES_PASSWORD:-postgrespassword}
@@ -63,8 +58,6 @@ services:
   redis:
     image: redis:7.2-alpine
     container_name: my-redis
-    ports:
-      - "6379:6379"
     command: redis-server --appendonly yes --requirepass ${REDIS_PASSWORD:-redispassword}
     volumes:
       - redis-data:/data
@@ -78,6 +71,9 @@ services:
 
 networks:
   fastchat:
+    external: true
+  shared-gateway:
+    external: true
   
 volumes:
   mongo-data:
