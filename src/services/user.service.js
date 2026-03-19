@@ -1,6 +1,5 @@
 const bcrypt = require('bcrypt')
-const path = require('path')
-const fs = require('fs').promises
+const s3Service = require('./s3.service')
 const { userRepository } = require('@repositories')
 const { logger } = require('@config')
 const { NotFoundError, AuthenticationError } = require('@errors')
@@ -73,7 +72,7 @@ class UserService {
     // Delete user's avatar if exists
     if (user.avatar) {
       try {
-        await fs.unlink(path.join('uploads/public/avatars', user.avatar))
+        await s3Service.deleteFile(user.avatar)
         logger.info('Avatar file deleted', { userId })
       } catch (err) {
         logger.warn('Failed to delete avatar file', {
@@ -90,10 +89,33 @@ class UserService {
     return this.formatUser(deleted)
   }
 
+  async deleteAvatar(userId) {
+    const user = await userRepository.findById(userId)
+    if (!user) {
+      throw new NotFoundError('User not found')
+    }
+    if (user.avatar) {
+      try {
+        await s3Service.deleteFile(user.avatar)
+        logger.info('Old avatar deleted from storage', { userId, filename: user.avatar })
+      } catch (err) {
+        logger.warn('Failed to delete old avatar file', {
+          error: err.message,
+          stack: err.stack,
+          name: err.name,
+          userId,
+        })
+        throw err
+      }
+    }
+    const updated = await userRepository.deleteAvatar(userId)
+    return this.formatUser(updated)
+  }
+
   /**
    * Update user avatar
    */
-  async updateAvatar(userId, filename) {
+  async updateAvatar(userId, file) {
     const user = await userRepository.findById(userId)
     if (!user) {
       throw new NotFoundError('User not found')
@@ -102,7 +124,7 @@ class UserService {
     // Delete old avatar if exists
     if (user.avatar) {
       try {
-        await fs.unlink(path.join('uploads/public/avatars', user.avatar))
+        await s3Service.deleteFile(user.avatar)
         logger.info('Old avatar deleted from storage', { userId, filename: user.avatar })
       } catch (err) {
         logger.warn('Failed to delete old avatar file', {
@@ -114,17 +136,21 @@ class UserService {
       }
     }
 
-    // Update avatar in database
-    let updated
-    if (filename === null) {
-      // Use $unset to remove the field completely
-      updated = await userRepository.deleteAvatar(userId)
-    } else {
-      // Set new avatar filename
-      updated = await userRepository.updateById(userId, { avatar: filename })
+    const filename = `${userId}-${Date.now()}`
+    try {
+      const url = await s3Service.uploadFile(file.buffer, filename, file.mimetype)
+      const updated = await userRepository.updateById(userId, { avatar: url })
+      logger.info('User avatar updated', { userId, filename })
+      return this.formatUser(updated)
+    } catch (err) {
+      logger.warn('Failed to upload avatar file', {
+        error: err.message,
+        stack: err.stack,
+        name: err.name,
+        userId,
+      })
+      throw err
     }
-    logger.info('User avatar updated', { userId, filename })
-    return this.formatUser(updated)
   }
 
   /**

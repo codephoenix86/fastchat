@@ -8,4 +8,5 @@ module.exports = {
   mongo: require('./mongodb'),
   postgres: require('./postgresql'),
   redis: require('./redis'),
+  s3Client: require('./s3'),
 }

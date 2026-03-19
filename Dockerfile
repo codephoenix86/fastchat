@@ -24,7 +24,7 @@ COPY --from=builder --chown=node:node /usr/src/app/src src
 COPY --from=builder --chown=node:node /usr/src/app/server.js .
 COPY --from=builder --chown=node:node /usr/src/app/migrations migrations
 
-RUN mkdir -p uploads logs && chown -R node:node uploads logs 
+RUN mkdir -p logs && chown -R node:node logs
 
 USER node
 

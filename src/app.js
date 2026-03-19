@@ -58,9 +58,6 @@ app.use((req, res, next) => {
   next()
 })
 
-// Static files
-app.use('/uploads', express.static('uploads/public'))
-
 // All routes
 app.use(routes)
 

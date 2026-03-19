@@ -20,3 +20,8 @@ jest.mock('@sockets', () => ({
     })),
   },
 }))
+
+jest.mock('@services/s3.service', () => ({
+  uploadFile: jest.fn().mockResolvedValue('s3.url'),
+  deleteFile: jest.fn().mockResolvedValue(undefined),
+}))

@@ -11,8 +11,9 @@ Get fastchat running on your local machine in about 10 minutes.
 | MongoDB     | >= 6.0    |
 | PostgreSQL  | >= 16     |
 | Redis       | >= 7.2    |
+| AWS Account | —         |
 
-All three databases must be running before the server will start.
+All three databases must be running before the server will start. An AWS S3 bucket is required for avatar storage — the server will fail to start if the AWS environment variables are missing.
 
 ---
 
@@ -47,20 +48,41 @@ POSTGRES_URI=postgresql://postgres:password@localhost:5432/fastchat
 # Redis — stores refresh tokens and online presence
 REDIS_URI=redis://localhost:6379
 
-# JWT secrets — must each be at least 32 characters
+# JWT secret — must be at least 32 characters
 ACCESS_TOKEN_SECRET=your_very_long_secret_at_least_32_characters_here
 
 ACCESS_TOKEN_TTL=15m
 REFRESH_TOKEN_TTL=7d
+
+# AWS S3 — stores user avatar images
+AWS_REGION=us-east-1
+AWS_ACCESS_KEY_ID=your_aws_access_key_id
+AWS_SECRET_ACCESS_KEY=your_aws_secret_access_key
+S3_BUCKET_NAME=your_s3_bucket_name
 ```
 
-Generate secure secrets in one command:
+Generate a secure JWT secret in one command:
 
 ```bash
 node -e "console.log(require('crypto').randomBytes(32).toString('hex'))"
 ```
 
-Run it twice to get two different secrets.
+### AWS S3 Setup
+
+Create an S3 bucket and an IAM user with the following minimum policy. Replace `your_s3_bucket_name` with your actual bucket name:
+
+```json
+{
+  "Version": "2012-10-17",
+  "Statement": [
+    {
+      "Effect": "Allow",
+      "Action": ["s3:PutObject", "s3:DeleteObject"],
+      "Resource": "arn:aws:s3:::your_s3_bucket_name/*"
+    }
+  ]
+}
+```
 
 ---
 
@@ -105,7 +127,7 @@ sudo systemctl start mongod postgresql redis-server
 ## Step 4: Create Required Directories
 
 ```bash
-mkdir -p logs uploads/public/avatars uploads/private
+mkdir -p logs
 ```
 
 ---
@@ -140,7 +162,7 @@ info: Socket.io server initialized
 info: Server listening on port 3000
 ```
 
-If any database connection fails, the process exits immediately with a logged error.
+If any database connection fails, or if the AWS environment variables are missing/invalid, the process exits immediately with a logged error.
 
 ---
 
@@ -208,7 +230,7 @@ curl http://localhost:3000/api/v1/users/me \
 
 - **[REST API Reference](API_REST.md)** — full endpoint catalogue
 - **[WebSocket API](API_WEBSOCKET.md)** — real-time connection guide
-- **[Architecture Overview](ARCHITECTURE.md)** — understand how the three databases are used
+- **[Architecture Overview](ARCHITECTURE.md)** — understand how the databases and S3 are used
 
 ---
 
@@ -234,6 +256,10 @@ Your `.env` secret is too short. Generate a proper one:
 node -e "console.log(require('crypto').randomBytes(32).toString('hex'))"
 ```
 
+### `Invalid environment variables` mentioning AWS
+
+One or more of `AWS_REGION`, `AWS_ACCESS_KEY_ID`, `AWS_SECRET_ACCESS_KEY`, or `S3_BUCKET_NAME` is missing from `.env`. All four are required — the server will not start without them. See Step 2 for details.
+
 ### Port 3000 already in use
 
 ```bash
@@ -254,3 +280,7 @@ Migrations have not been run. Execute `npm run migrate:up`.
 ### `relation already exists` on `migrate:up`
 
 The migration was already applied. This is safe to ignore; node-pg-migrate tracks which migrations have run.
+
+### Avatar upload returns 500 / S3 errors
+
+Check that the IAM user has `s3:PutObject` and `s3:DeleteObject` permissions on the configured bucket, and that `AWS_REGION` matches the bucket's actual region.

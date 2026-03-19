@@ -1,19 +1,9 @@
 const multer = require('multer')
-const path = require('path')
 
 const { UnsupportedMediaTypeError } = require('@errors')
 const { VALIDATION } = require('@constants')
 
-const storage = multer.diskStorage({
-  destination: (req, file, cb) => {
-    cb(null, 'uploads/public/avatars')
-  },
-  filename: (req, file, cb) => {
-    const ext = path.extname(file.originalname)
-    const uniqueSuffix = `${Date.now()}-${Math.round(Math.random() * 1e9)}`
-    cb(null, `${req.user.id}-${uniqueSuffix}${ext}`)
-  },
-})
+const storage = multer.memoryStorage()
 
 const fileFilter = (req, file, cb) => {
   if (!VALIDATION.FILE.ALLOWED_IMAGE_TYPES.includes(file.mimetype)) {

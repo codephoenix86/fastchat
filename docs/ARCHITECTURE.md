@@ -6,13 +6,14 @@ System design, data flow, database schemas, and design patterns for fastchat.
 
 ## System Architecture
 
-fastchat uses **three purpose-built databases** rather than a single store:
+fastchat uses **three purpose-built databases** plus **AWS S3** for file storage, rather than a single store:
 
 | Database       | Role                                                             |
 | -------------- | ---------------------------------------------------------------- |
 | **PostgreSQL** | Users, profiles, roles — relational, strongly typed, ACID        |
 | **MongoDB**    | Chats and messages — flexible documents, easy horizontal scaling |
 | **Redis**      | Refresh token sessions, online presence — in-memory, TTL-native  |
+| **AWS S3**     | Avatar images — durable object storage, served via public URL    |
 
 ```
 ┌──────────┐        HTTP / WebSocket
@@ -44,15 +45,16 @@ fastchat uses **three purpose-built databases** rather than a single store:
                   │ auth · user     │
                   │ chat · message  │
                   │ token · presence│
+                  │ s3              │
                   └────────┬────────┘
                            │
-          ┌────────────────┼────────────────┐
-          ▼                ▼                ▼
-   ┌────────────┐  ┌─────────────┐  ┌─────────────┐
-   │    User    │  │    Chat /   │  │    Token    │
-   │ Repository │  │   Message   │  │ Repository  │
-   │(PostgreSQL)│  │ Repository  │  │  (Redis)    │
-   └─────┬──────┘  │ (MongoDB)   │  └──────┬──────┘
+          ┌────────────────┼────────────────┬──────────────┐
+          ▼                ▼                ▼              ▼
+   ┌────────────┐  ┌─────────────┐  ┌─────────────┐ ┌─────────┐
+   │    User    │  │    Chat /   │  │    Token    │ │  AWS S3 │
+   │ Repository │  │   Message   │  │ Repository  │ │ (avatar │
+   │(PostgreSQL)│  │ Repository  │  │  (Redis)    │ │ storage)│
+   └─────┬──────┘  │ (MongoDB)   │  └──────┬──────┘ └─────────┘
          │         └──────┬──────┘         │
          ▼                ▼                ▼
    ┌──────────┐    ┌──────────────┐  ┌──────────┐
@@ -95,6 +97,7 @@ Client Request
 │                 Service                    │
 │  • Enforces business rules                  │
 │  • Calls one or more repositories           │
+│  • Calls S3Service for avatar operations    │
 │  • Throws typed AppError subclasses         │
 └─────────────────────────────────────────────┘
       │
@@ -106,9 +109,9 @@ Client Request
 └─────────────────────────────────────────────┘
       │
       ▼
-┌──────────┬──────────────┬─────────┐
-│PostgreSQL│   MongoDB    │  Redis  │
-└──────────┴──────────────┴─────────┘
+┌──────────┬──────────────┬─────────┬─────────┐
+│PostgreSQL│   MongoDB    │  Redis  │  AWS S3 │
+└──────────┴──────────────┴─────────┴─────────┘
 
 Error path: any thrown AppError is caught by
 asyncHandler and forwarded to the global error
@@ -125,6 +128,18 @@ middleware, which serialises it to JSON.
 6. Service creates the message document in **MongoDB**.
 7. Controller emits `message:new` to the Socket.io room (`chatId`) so connected clients receive it in real-time.
 8. Controller responds with the new message wrapped in `ApiResponse`.
+
+### Example: Uploading an Avatar
+
+1. `POST /api/v1/users/me/avatar` enters the middleware chain with `multipart/form-data`.
+2. Multer middleware validates the file type and size, holding the file in memory (`memoryStorage`).
+3. Auth middleware verifies the JWT and attaches `req.user`.
+4. `UserController.uploadAvatar` calls `userService.updateAvatar(userId, file)`.
+5. Service fetches the user from **PostgreSQL** to check for an existing avatar.
+6. If an old avatar exists, `S3Service.deleteFile(oldAvatarUrl)` is called first. Failure is logged but does not abort the upload.
+7. `S3Service.uploadFile(buffer, filename, mimetype)` sends a `PutObjectCommand` to **AWS S3**. The filename is `<userId>-<timestamp>`.
+8. On success, `userRepository.updateById` persists the full S3 URL to the `profiles.avatar` column in **PostgreSQL**.
+9. Controller responds with the updated user object including the new S3 URL in the `avatar` field.
 
 ---
 
@@ -191,14 +206,14 @@ Two tables, linked 1:1.
 
 **profiles** (one-to-one with users, CASCADE delete)
 
-| Column                      | Type        | Notes                        |
-| --------------------------- | ----------- | ---------------------------- |
-| `id`                        | `uuid`      | PK                           |
-| `user_id`                   | `uuid`      | FK → users, unique           |
-| `avatar`                    | `text`      | nullable filename            |
-| `bio`                       | `text`      | nullable, max 200 chars      |
-| `last_seen`                 | `timestamp` | updated on socket disconnect |
-| `created_at` / `updated_at` | `timestamp` | —                            |
+| Column                      | Type        | Notes                          |
+| --------------------------- | ----------- | ------------------------------ |
+| `id`                        | `uuid`      | PK                             |
+| `user_id`                   | `uuid`      | FK → users, unique             |
+| `avatar`                    | `text`      | nullable; full S3 URL when set |
+| `bio`                       | `text`      | nullable, max 200 chars        |
+| `last_seen`                 | `timestamp` | updated on socket disconnect   |
+| `created_at` / `updated_at` | `timestamp` | —                              |
 
 A profile row is created automatically when a user signs up.
 
@@ -261,6 +276,17 @@ Value: Redis Set of active socketIds
 TTL:   none (managed explicitly by connect/disconnect handlers)
 ```
 
+### AWS S3 — Avatars
+
+```
+Bucket: <S3_BUCKET_NAME>
+Key:    <userId>-<timestamp>          e.g. "a1b2c3d4-1706000000000"
+Value:  binary image file
+URL:    https://<bucket>.s3.<region>.amazonaws.com/<key>
+```
+
+The full URL is stored in `profiles.avatar` in PostgreSQL and returned in all user responses. When a user uploads a new avatar the old key is deleted first. When a user deletes their account the avatar key is also deleted (S3 failure is non-fatal for account deletion).
+
 ---
 
 ## Design Patterns
@@ -270,11 +296,13 @@ TTL:   none (managed explicitly by connect/disconnect handlers)
 Each database concern is wrapped in a repository class that exposes a domain-oriented interface. Services never import DB clients directly.
 
 ```
-UserRepository   → PostgreSQL pool queries
-ChatRepository   → Mongoose Model methods
+UserRepository    → PostgreSQL pool queries
+ChatRepository    → Mongoose Model methods
 MessageRepository → Mongoose Model methods
-TokenRepository  → ioredis client
+TokenRepository   → ioredis client
 ```
+
+S3 access is encapsulated in `S3Service` rather than a repository because it has no query interface — it is purely a side-effecting I/O layer called directly by `UserService`.
 
 ### Service Layer
 
@@ -302,7 +330,7 @@ Operational errors produce a structured JSON response with a `code` field. Non-o
 
 ### Singleton Services
 
-`presenceService`, `tokenService`, and all repository instances are module-level singletons, exported as plain objects. The Socket.io server instance is exposed via a Proxy that throws if accessed before `init()` is called.
+`presenceService`, `tokenService`, `s3Service`, and all repository instances are module-level singletons, exported as plain objects. The Socket.io server instance is exposed via a Proxy that throws if accessed before `init()` is called.
 
 ---
 
@@ -314,7 +342,7 @@ Operational errors produce a structured JSON response with a `code` field. Non-o
 2. Disconnects MongoDB, closes the PostgreSQL pool, and quits Redis.
 3. Exits with code `0`.
 
-A 10-second forced-exit timeout is set to handle hung connections.
+A 10-second forced-exit timeout is set to handle hung connections. Note that in-flight S3 requests are not explicitly drained — the AWS SDK will abort them when the process exits.
 
 ---
 

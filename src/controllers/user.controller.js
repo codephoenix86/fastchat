@@ -55,8 +55,8 @@ exports.updateCurrentUser = async (req, res) => {
 }
 
 exports.deleteCurrentUser = async (req, res) => {
-  const deleted = await userService.deleteUser(req.user.id)
-  res.status(StatusCodes.OK).json(new ApiResponse('Account deleted successfully', deleted))
+  const user = await userService.deleteUser(req.user.id)
+  res.status(StatusCodes.OK).json(new ApiResponse('Account deleted successfully', { user }))
 }
 
 exports.uploadAvatar = async (req, res) => {
@@ -65,13 +65,13 @@ exports.uploadAvatar = async (req, res) => {
     throw new ValidationError('Please upload an image file')
   }
 
-  const user = await userService.updateAvatar(req.user.id, req.file.filename)
+  const user = await userService.updateAvatar(req.user.id, req.file)
 
   res.status(StatusCodes.OK).json(new ApiResponse('Avatar uploaded successfully', { user }))
 }
 
 exports.deleteAvatar = async (req, res) => {
-  const user = await userService.updateAvatar(req.user.id, null)
+  const user = await userService.deleteAvatar(req.user.id)
 
   res.status(StatusCodes.OK).json(new ApiResponse('Avatar removed successfully', { user }))
 }

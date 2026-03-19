@@ -228,7 +228,7 @@ Get the currently authenticated user's full profile.
       "username": "alice",
       "email": "alice@example.com",
       "role": "user",
-      "avatar": "uuid-timestamp.jpg",
+      "avatar": "https://your-bucket.s3.us-east-1.amazonaws.com/uuid-1706000000000",
       "bio": "Hello!",
       "lastSeen": "2024-01-21T10:30:00.000Z",
       "createdAt": "2024-01-20T10:00:00.000Z",
@@ -237,6 +237,8 @@ Get the currently authenticated user's full profile.
   }
 }
 ```
+
+> The `avatar` field is a full S3 URL when set, or omitted from the response when no avatar has been uploaded.
 
 **Errors** — `401` missing or invalid token
 
@@ -263,7 +265,7 @@ At least one of the above fields must be present.
 
 ### DELETE `/api/v1/users/me`
 
-Permanently delete the authenticated user's account. Also deletes their avatar file if present.
+Permanently delete the authenticated user's account. Also deletes their avatar from S3 if one is set (S3 deletion failure is logged but does not block account deletion).
 
 **Response `200`**
 
@@ -275,7 +277,7 @@ Permanently delete the authenticated user's account. Also deletes their avatar f
 
 ### POST `/api/v1/users/me/avatar`
 
-Upload a profile picture.
+Upload a profile picture. The file is stored in S3; the returned `avatar` field is the full S3 URL. Any previously set avatar is deleted from S3 before the new one is uploaded.
 
 **Request** — `multipart/form-data` with field name `avatar`
 
@@ -287,17 +289,22 @@ Accepted types: `image/jpeg`, `image/jpg`, `image/png`, `image/gif`. Max size: 5
 {
   "success": true,
   "message": "Avatar uploaded successfully",
-  "data": { "user": { "id": "uuid", "avatar": "uuid-timestamp.jpg" } }
+  "data": {
+    "user": {
+      "id": "uuid",
+      "avatar": "https://your-bucket.s3.us-east-1.amazonaws.com/uuid-1706000000000"
+    }
+  }
 }
 ```
 
-**Errors** — `400` no file provided · `413` file too large · `415` unsupported file type
+**Errors** — `400` no file provided · `413` file too large · `415` unsupported file type · `500` S3 upload failed
 
 ---
 
 ### DELETE `/api/v1/users/me/avatar`
 
-Remove the current avatar. Safe to call even when no avatar is set.
+Remove the current avatar. Deletes the file from S3 and clears the field in the database. Returns an error if the S3 deletion fails. Safe to call even when no avatar is set (no-op in that case).
 
 **Response `200`**
 

@@ -14,7 +14,7 @@ A production-ready real-time chat application built with Node.js, Express, Mongo
 - 👥 **User Management** — PostgreSQL-backed users and profiles with full CRUD support
 - 💬 **Real-Time Messaging** — Instant messaging with delivery/read receipts via Socket.io
 - 🔔 **Typing Indicators** — Real-time typing status broadcasts
-- 👤 **Avatar Support** — Profile pictures via multipart file upload
+- 👤 **Avatar Support** — Profile pictures stored in AWS S3 via multipart file upload
 - 🔍 **Advanced Queries** — Pagination, search, filtering, and sorting on all list endpoints
 - 📊 **Online Presence** — Redis-backed user presence tracking with last-seen timestamps
 - 🔒 **Security** — Helmet, CORS, XSS sanitization, input validation, and rate limiting
@@ -29,10 +29,7 @@ npm install
 
 # Configure environment
 cp .env.example .env
-# Edit .env with your database URIs and secrets
-
-# Create required directories
-mkdir -p logs uploads/public/avatars uploads/private
+# Edit .env with your database URIs, secrets, and AWS credentials
 
 # Run PostgreSQL migrations
 npm run migrate:up
@@ -62,24 +59,29 @@ npm test
 | Sessions / Presence | Redis 7.2+ (via ioredis)               |
 | Real-time           | Socket.io 4.x                          |
 | Authentication      | JWT (access) + opaque tokens (refresh) |
+| File Storage        | AWS S3 (via `@aws-sdk/client-s3`)      |
 | Validation          | Joi schemas                            |
 | Testing             | Jest, Supertest                        |
 | Logging             | Winston + daily-rotate-file            |
 
 ## Environment Configuration
 
-| Variable              | Description                                | Default                 |
-| --------------------- | ------------------------------------------ | ----------------------- |
-| `NODE_ENV`            | Environment mode                           | `development`           |
-| `PORT`                | Server port                                | `3000`                  |
-| `MONGODB_URI`         | MongoDB connection string                  | Required                |
-| `POSTGRES_URI`        | PostgreSQL connection string               | Required                |
-| `REDIS_URI`           | Redis connection string                    | Required                |
-| `ACCESS_TOKEN_SECRET` | Access token signing secret (min 32 chars) | Required                |
-| `ACCESS_TOKEN_TTL`    | Access token lifetime                      | `15m`                   |
-| `REFRESH_TOKEN_TTL`   | Refresh token Redis key TTL                | `7d`                    |
-| `ALLOWED_ORIGINS`     | Comma-separated CORS origins               | `http://localhost:3000` |
-| `MAX_FILE_SIZE`       | Avatar upload limit in bytes               | `5242880`               |
+| Variable                | Description                                | Default                 |
+| ----------------------- | ------------------------------------------ | ----------------------- |
+| `NODE_ENV`              | Environment mode                           | `development`           |
+| `PORT`                  | Server port                                | `3000`                  |
+| `MONGODB_URI`           | MongoDB connection string                  | Required                |
+| `POSTGRES_URI`          | PostgreSQL connection string               | Required                |
+| `REDIS_URI`             | Redis connection string                    | Required                |
+| `ACCESS_TOKEN_SECRET`   | Access token signing secret (min 32 chars) | Required                |
+| `ACCESS_TOKEN_TTL`      | Access token lifetime                      | `15m`                   |
+| `REFRESH_TOKEN_TTL`     | Refresh token Redis key TTL                | `7d`                    |
+| `ALLOWED_ORIGINS`       | Comma-separated CORS origins               | `http://localhost:3000` |
+| `MAX_FILE_SIZE`         | Avatar upload limit in bytes               | `5242880`               |
+| `AWS_REGION`            | AWS region for S3                          | Required                |
+| `AWS_ACCESS_KEY_ID`     | AWS IAM access key ID                      | Required                |
+| `AWS_SECRET_ACCESS_KEY` | AWS IAM secret access key                  | Required                |
+| `S3_BUCKET_NAME`        | S3 bucket name for avatar storage          | Required                |
 
 See [.env.example](.env.example) for the full template.
 
@@ -143,7 +145,7 @@ npm run format                   # Format with Prettier
 ```
 fastchat/
 ├── src/
-│   ├── config/          # DB connections (mongo, postgres, redis), logger, env
+│   ├── config/          # DB connections (mongo, postgres, redis, s3), logger, env
 │   ├── constants/       # Shared enums and validation constants
 │   ├── controllers/     # Express route handlers
 │   ├── errors/          # Custom error classes
@@ -162,7 +164,6 @@ fastchat/
 │   ├── unit/            # Isolated service / middleware tests
 │   ├── helpers/         # DB connect/clear/disconnect helpers
 │   └── setup.js         # Jest global setup
-├── uploads/             # Stored avatar files
 ├── logs/                # Rotated application logs
 ├── docs/                # Documentation
 └── server.js            # Entry point

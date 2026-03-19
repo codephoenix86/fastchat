@@ -18,6 +18,10 @@ const env = cleanEnv(process.env, {
     default: 'info',
   }),
   MAX_FILE_SIZE: num({ default: 5242880 }),
+  AWS_REGION: str(),
+  AWS_ACCESS_KEY_ID: str(),
+  AWS_SECRET_ACCESS_KEY: str(),
+  S3_BUCKET_NAME: str(),
 })
 
 module.exports = env
