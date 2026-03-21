@@ -8,6 +8,16 @@
 
 A production-ready real-time chat application built with Node.js, Express, MongoDB, PostgreSQL, Redis, and Socket.io — following REST best practices and clean architecture principles.
 
+## Live Demo
+
+The API is deployed on AWS EC2 with HTTPS, Nginx reverse proxy, and Docker.
+
+**Base URL:** https://fastchat.duckdns.org
+
+> **Note:** This URL may not always be live. Check the health endpoint to verify: `GET https://fastchat.duckdns.org/health`
+
+**Deployment write-up:** [How I Deployed My First Production App on AWS EC2 — Every Mistake I Made](https://dev.to/codephoenix86/how-i-deployed-my-first-production-app-on-aws-ec2-every-mistake-i-made-4e8e)
+
 ## Features
 
 - 🔐 **JWT Authentication** — Short-lived access tokens with opaque refresh tokens stored in Redis
@@ -63,6 +73,17 @@ npm test
 | Validation          | Joi schemas                            |
 | Testing             | Jest, Supertest                        |
 | Logging             | Winston + daily-rotate-file            |
+
+## Infrastructure
+
+| Component      | Technology                         |
+| -------------- | ---------------------------------- |
+| Server         | AWS EC2 (t3.micro, Ubuntu)         |
+| Reverse Proxy  | Nginx (Docker container)           |
+| SSL            | Let's Encrypt via Certbot          |
+| Domain         | DuckDNS (fastchat.duckdns.org)     |
+| Containers     | Docker + Docker Compose            |
+| Image Registry | DockerHub (nareshlohar86/fastchat) |
 
 ## Environment Configuration
 
@@ -175,4 +196,4 @@ ISC
 
 ## Author
 
-Naresh Lohar — [GitHub](https://github.com/codephoenix86/fastchat)
+Naresh Lohar — [GitHub](https://github.com/codephoenix86/fastchat) · [LinkedIn](https://www.linkedin.com/in/nareshlohar86/)
