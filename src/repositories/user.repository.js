@@ -51,8 +51,26 @@ class UserRepository {
     return result.rows[0]
   }
 
+  _normalizeSortForUserList(sort) {
+    const allowed = new Set(['username', 'email', 'created_at'])
+    const toSqlColumn = (key) => (key === 'createdAt' ? 'created_at' : key)
+
+    let pairs = []
+    if (Array.isArray(sort)) {
+      pairs = sort.map(([field, direction]) => [toSqlColumn(field), direction])
+    } else if (sort && typeof sort === 'object') {
+      pairs = Object.entries(sort).map(([field, direction]) => [toSqlColumn(field), direction])
+    }
+
+    pairs = pairs.filter(([field]) => allowed.has(field))
+    if (pairs.length === 0) {
+      pairs = [['created_at', -1]]
+    }
+    return pairs
+  }
+
   async findAll(query, filters, options = {}) {
-    const { skip = 0, limit = 20, sort = { createdAt: -1 } } = options
+    const { skip = 0, limit = 20, sort } = options
     const conditions = []
     const params = []
 
@@ -66,12 +84,10 @@ class UserRepository {
       conditions.push(`(users.username ~* $${params.length} OR users.email ~* $${params.length})`)
     }
 
-    const sortValues = ['username', 'email', 'created_at']
+    const sortPairs = this._normalizeSortForUserList(sort)
     const sortings = []
-    sort.forEach(([key, value]) => {
-      if (sortValues.includes(key)) {
-        sortings.push(`users.${key} ${value === 1 ? 'ASC' : 'DESC'}`)
-      }
+    sortPairs.forEach(([key, value]) => {
+      sortings.push(`users.${key} ${value === 1 ? 'ASC' : 'DESC'}`)
     })
 
     const whereClause = conditions.length > 0 ? `WHERE ${conditions.join(' AND ')}` : ''
