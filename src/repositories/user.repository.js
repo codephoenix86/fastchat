@@ -100,9 +100,14 @@ class UserRepository {
   }
 
   async contains(arr) {
-    const statement = `SELECT COUNT(*) FROM users WHERE id IN (${arr.map((id) => `'${id}'`).join(', ')})`
-    const result = await pool.query(statement)
-    return parseInt(result.rows[0].count) === arr.length
+    if (!arr || arr.length === 0) {
+      return true
+    }
+
+    const placeholders = arr.map((_, i) => `$${i + 1}`).join(', ')
+    const statement = `SELECT COUNT(*) FROM users WHERE id IN (${placeholders})`
+    const result = await pool.query(statement, arr)
+    return parseInt(result.rows[0].count, 10) === arr.length
   }
   async countDocuments(filters, query) {
     const conditions = []
