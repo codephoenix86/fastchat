@@ -2,6 +2,26 @@ const { postgres } = require('@config')
 const { ConflictError } = require('@errors')
 const pool = postgres.getPool()
 class UserRepository {
+  _normalizeUserFilters(filters) {
+    const allowed = new Set(['id', 'username', 'email', 'role'])
+    const safe = {}
+    if (!filters || typeof filters !== 'object') {
+      return safe
+    }
+
+    Object.entries(filters).forEach(([key, value]) => {
+      if (!allowed.has(key)) {
+        return
+      }
+      if (value === undefined) {
+        return
+      }
+      safe[key] = value
+    })
+
+    return safe
+  }
+
   async create(userData) {
     const { email, username, password_hash } = userData
     const userStatement =
@@ -74,7 +94,8 @@ class UserRepository {
     const conditions = []
     const params = []
 
-    Object.entries(filters).forEach(([key, value]) => {
+    const safeFilters = this._normalizeUserFilters(filters)
+    Object.entries(safeFilters).forEach(([key, value]) => {
       params.push(value)
       conditions.push(`users.${key} = $${params.length}`)
     })
@@ -113,7 +134,8 @@ class UserRepository {
     const conditions = []
     const params = []
 
-    Object.entries(filters).forEach(([key, value]) => {
+    const safeFilters = this._normalizeUserFilters(filters)
+    Object.entries(safeFilters).forEach(([key, value]) => {
       params.push(value)
       conditions.push(`users.${key} = $${params.length}`)
     })
