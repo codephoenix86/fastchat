@@ -1,7 +1,27 @@
 const { postgres } = require('@config')
-const { ConflictError } = require('@errors')
+const { ConflictError, ValidationError } = require('@errors')
 const pool = postgres.getPool()
 class UserRepository {
+  _isUuid(value) {
+    if (typeof value !== 'string') {
+      return false
+    }
+    return /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(value)
+  }
+
+  _assertUuid(value, field = 'id') {
+    if (!this._isUuid(value)) {
+      throw new ValidationError(`Invalid ${field} format. Must be a valid UUID.`, 'INVALID_UUID')
+    }
+  }
+
+  _assertUuidArray(values, field = 'id') {
+    if (!Array.isArray(values)) {
+      throw new ValidationError(`${field} must be an array`, 'BAD_REQUEST')
+    }
+    values.forEach((v) => this._assertUuid(v, field))
+  }
+
   _normalizeUserFilters(filters) {
     const allowed = new Set(['id', 'username', 'email', 'role'])
     const safe = {}
@@ -50,6 +70,7 @@ class UserRepository {
     return result.rows[0] || null
   }
   async findById(userId) {
+    this._assertUuid(userId, 'userId')
     const statement =
       'SELECT users.id, users.username, users.email, users.role, profiles.bio, profiles.avatar, profiles.last_seen, users.created_at, profiles.updated_at FROM users LEFT JOIN profiles ON users.id = profiles.user_id WHERE users.id = $1'
     const result = await pool.query(statement, [userId])
@@ -57,6 +78,7 @@ class UserRepository {
   }
 
   async findByIdWithPassword(userId) {
+    this._assertUuid(userId, 'userId')
     const statement =
       'SELECT users.id, users.username, users.email, users.password_hash, users.role, profiles.bio, profiles.avatar, profiles.last_seen, users.created_at, profiles.updated_at FROM users LEFT JOIN profiles ON users.id = profiles.user_id WHERE users.id = $1'
     const result = await pool.query(statement, [userId])
@@ -125,6 +147,7 @@ class UserRepository {
       return true
     }
 
+    this._assertUuidArray(arr, 'userId')
     const placeholders = arr.map((_, i) => `$${i + 1}`).join(', ')
     const statement = `SELECT COUNT(*) FROM users WHERE id IN (${placeholders})`
     const result = await pool.query(statement, arr)
@@ -151,6 +174,7 @@ class UserRepository {
   }
 
   async updateById(userId, updateData) {
+    this._assertUuid(userId, 'userId')
     const client = await pool.connect()
     try {
       await client.query('BEGIN')
@@ -228,10 +252,12 @@ class UserRepository {
   }
 
   async findByIdAndDelete(userId) {
+    this._assertUuid(userId, 'userId')
     const result = await pool.query('DELETE FROM users where id = $1 RETURNING *', [userId])
     return result.rows[0]
   }
   async deleteAvatar(userId) {
+    this._assertUuid(userId, 'userId')
     const statement = 'UPDATE profiles SET avatar = NULL WHERE user_id = $1 RETURNING *'
     const result = await pool.query(statement, [userId])
     return result.rows[0]
