@@ -177,9 +177,27 @@ class UserRepository {
 
   async updateById(userId, updateData) {
     this._assertUuid(userId, 'userId')
+
+    const hasUserUpdate = !!(updateData.username || updateData.email || updateData.password_hash)
+    const hasProfileUpdate = !!(updateData.bio || updateData.avatar)
+
+    const selectRow = async () => {
+      const result = await pool.query(
+        'SELECT users.id, users.username, users.email, users.password_hash, users.role, profiles.bio, profiles.avatar, profiles.last_seen, users.created_at, profiles.updated_at FROM users LEFT JOIN profiles ON users.id = profiles.user_id WHERE users.id = $1',
+        [userId]
+      )
+      return result.rows[0] || null
+    }
+
+    if (!hasUserUpdate && !hasProfileUpdate) {
+      return selectRow()
+    }
+
     const client = await pool.connect()
+    let txStarted = false
     try {
       await client.query('BEGIN')
+      txStarted = true
 
       const userFields = []
       const userValues = []
@@ -233,12 +251,17 @@ class UserRepository {
 
       await client.query('COMMIT')
     } catch (err) {
-      await client.query('ROLLBACK')
+      if (txStarted) {
+        try {
+          await client.query('ROLLBACK')
+        } catch (_) {}
+      }
       if (err.code === '23505') {
-        if (err.constraint.includes('email')) {
+        const c = String(err.constraint || '')
+        if (c.includes('email')) {
           throw new ConflictError('Email already exists', 'EMAIL_ALREADY_EXISTS')
         }
-        if (err.constraint.includes('username')) {
+        if (c.includes('username')) {
           throw new ConflictError('Username already taken', 'USERNAME_ALREADY_TAKEN')
         }
       }
@@ -246,11 +269,8 @@ class UserRepository {
     } finally {
       client.release()
     }
-    const result = await pool.query(
-      'SELECT users.id, users.username, users.email, users.password_hash, users.role, profiles.bio, profiles.avatar, profiles.last_seen, users.created_at, profiles.updated_at FROM users LEFT JOIN profiles ON users.id = profiles.user_id WHERE users.id = $1',
-      [userId]
-    )
-    return result.rows[0] || null
+
+    return selectRow()
   }
 
   async findByIdAndDelete(userId) {
