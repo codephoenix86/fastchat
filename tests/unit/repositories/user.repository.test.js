@@ -75,6 +75,20 @@ describe('UserRepository', () => {
       expect(params).toContain('admin')
     })
 
+    it('rejects bad role values even if something slips past the controller', async () => {
+      await expect(userRepository.findAll(undefined, { role: 'superadmin' })).rejects.toMatchObject(
+        { code: 'INVALID_ROLE' }
+      )
+      expect(pool.query).not.toHaveBeenCalled()
+    })
+
+    it('rejects non-uuid id filters', async () => {
+      await expect(userRepository.findAll(undefined, { id: 'not-a-uuid' })).rejects.toMatchObject({
+        code: 'INVALID_UUID',
+      })
+      expect(pool.query).not.toHaveBeenCalled()
+    })
+
     it('clamps weird pagination', async () => {
       pool.query.mockResolvedValue({ rows: [] })
 

@@ -56,7 +56,7 @@ npm test
 - **[Quick Start Guide](docs/QUICKSTART.md)** — Get up and running in 5 minutes
 - **[REST API Reference](docs/API_REST.md)** — Complete HTTP endpoint documentation
 - **[WebSocket API](docs/API_WEBSOCKET.md)** — Socket.io events and real-time features
-- **[Architecture Overview](docs/ARCHITECTURE.md)** — System design and patterns
+- **[Architecture Overview](docs/ARCHITECTURE.md)** — System design, layers, and where validation runs
 - **[Testing Guide](docs/TESTING.md)** — Testing strategy and best practices
 
 ## Tech Stack

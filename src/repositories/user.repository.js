@@ -1,3 +1,4 @@
+const { USER_ROLES } = require('@constants')
 const { postgres } = require('@config')
 const { ConflictError, ValidationError } = require('@errors')
 const pool = postgres.getPool()
@@ -39,7 +40,21 @@ class UserRepository {
       safe[key] = value
     })
 
+    this._validateSensitiveFilterFields(safe)
+
     return safe
+  }
+
+  _validateSensitiveFilterFields(safe) {
+    if (safe.id !== undefined && safe.id !== null && safe.id !== '') {
+      this._assertUuid(String(safe.id), 'id')
+    }
+    if (safe.role !== undefined && safe.role !== null && safe.role !== '') {
+      const allowedRoles = new Set(Object.values(USER_ROLES))
+      if (!allowedRoles.has(safe.role)) {
+        throw new ValidationError('Invalid role filter', 'INVALID_ROLE')
+      }
+    }
   }
 
   async create(userData) {

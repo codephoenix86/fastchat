@@ -106,6 +106,8 @@ Client Request
 │               Repository                   │
 │  • Single database concern                  │
 │  • Returns raw DB rows / documents          │
+│  • Assumes validated input from above       │
+│    (extra checks only for sensitive bits)   │
 └─────────────────────────────────────────────┘
       │
       ▼
@@ -117,6 +119,12 @@ Error path: any thrown AppError is caught by
 asyncHandler and forwarded to the global error
 middleware, which serialises it to JSON.
 ```
+
+### Validation boundaries
+
+**Primary validation** happens at the edge: Joi (and similar) on routes, plus controllers passing only expected fields into services. Services apply business rules.
+
+**Repositories** are not meant to duplicate every API rule. They focus on talking to the database safely. For a few sensitive cases (for example filtering by `id` or `role` in SQL), the user repository still validates those values so a bad caller cannot bypass higher layers and ship junk into queries.
 
 ### Example: Sending a Message
 
