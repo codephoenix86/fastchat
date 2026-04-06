@@ -113,6 +113,8 @@ class UserRepository {
 
   async findAll(query, filters, options = {}) {
     const { skip = 0, limit = 20, sort } = options
+    const safeSkip = Number.isFinite(+skip) ? Math.max(0, parseInt(skip, 10)) : 0
+    const safeLimit = Number.isFinite(+limit) ? Math.min(100, Math.max(1, parseInt(limit, 10))) : 20
     const conditions = []
     const params = []
 
@@ -137,7 +139,7 @@ class UserRepository {
     const sortClause = sortings.length > 0 ? `ORDER BY ${sortings.join(', ')}` : ''
     const statement = `SELECT users.id, users.username, users.email, users.password_hash, users.role, profiles.bio, profiles.avatar, profiles.last_seen, users.created_at, profiles.updated_at FROM users LEFT JOIN profiles ON users.id = profiles.user_id ${whereClause} ${sortClause} LIMIT $${params.length + 1} OFFSET $${params.length + 2}`
 
-    params.push(limit, skip)
+    params.push(safeLimit, safeSkip)
     const result = await pool.query(statement, params)
     return result.rows
   }
