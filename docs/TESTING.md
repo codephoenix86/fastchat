@@ -61,9 +61,14 @@ tests/
 
 ## Running Tests
 
+The default **`npm test`** runs Jest with **`--runInBand`** (one worker). With a **single shared** Postgres/Mongo/Redis for integration tests, parallel workers interleave HTTP requests and `clearTestDB` (`TRUNCATE` + deletes), which can trigger **Postgres deadlocks** — serial runs avoid that. **`npm run test:parallel`** runs the full suite with multiple workers and may still fail on integration; use it only if you accept flakiness or run **`npm run test:unit`** for a fast parallel check.
+
 ```bash
-# All tests with coverage report
+# All tests with coverage (serial — reliable with one shared test DB)
 npm test
+
+# Faster full suite (parallel workers — can deadlock integration tests if DB is shared)
+npm run test:parallel
 
 # Watch mode (re-runs on file save)
 npm run test:watch
@@ -71,10 +76,10 @@ npm run test:watch
 # Unit tests only
 npm run test:unit
 
-# Integration tests only
+# Integration tests only (serial)
 npm run test:integration
 
-# Run serially (useful when debugging flaky tests)
+# Same as npm test (serial full suite)
 npm run test:sequential
 
 # Attach Node inspector

@@ -149,11 +149,12 @@ See [REST API Reference](docs/API_REST.md) for full documentation.
 ```bash
 npm start                        # Production server
 npm run dev                      # Development with nodemon
-npm test                         # All tests with coverage
+npm test                         # All tests with coverage (serial; avoids DB deadlocks)
+npm run test:parallel            # Same as npm test but parallel workers (faster; can flake on integration)
 npm run test:watch               # Watch mode
 npm run test:unit                # Unit tests only
-npm run test:integration         # Integration tests only
-npm run test:sequential          # Run tests serially (debug)
+npm run test:integration         # Integration tests only (serial)
+npm run test:sequential          # Same as npm test (serial full suite)
 npm run migrate:up               # Apply PostgreSQL migrations
 npm run migrate:down             # Roll back last migration
 npm run migrate:create -- <name> # Create a new migration file
