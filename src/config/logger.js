@@ -1,6 +1,6 @@
 const winston = require('winston')
 const DailyRotateFile = require('winston-daily-rotate-file')
-const env = require('@config/env')
+const env = require('./env')
 
 const logFormat = winston.format.combine(
   winston.format.timestamp({ format: 'YYYY-MM-DD HH:mm:ss' }),
