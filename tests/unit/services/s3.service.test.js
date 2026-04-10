@@ -7,17 +7,24 @@ jest.mock('@aws-sdk/client-s3', () => ({
     .mockImplementation((input) => ({ input, type: 'DeleteObjectCommand' })),
 }))
 jest.mock('@config', () => ({
-  s3Client: { send: jest.fn() },
-  env: { S3_BUCKET_NAME: 'test-bucket', AWS_REGION: 'ap-south1' },
+  s3: { getClient: jest.fn() },
+  env: {
+    S3_ENABLED: true,
+    S3_BUCKET_NAME: 'test-bucket',
+    AWS_REGION: 'ap-south1',
+  },
 }))
 
 const { PutObjectCommand, DeleteObjectCommand } = require('@aws-sdk/client-s3')
-const { s3Client, env } = require('@config')
+const { s3, env } = require('@config')
 const s3Service = require('@services/s3.service')
 
 describe('S3Service', () => {
+  const s3Client = { send: jest.fn() }
+
   beforeEach(() => {
     jest.clearAllMocks()
+    s3.getClient.mockReturnValue(s3Client)
   })
 
   describe('uploadFile', () => {
@@ -81,13 +88,13 @@ describe('S3Service', () => {
     it('should throw when s3Client.send rejects', async () => {
       s3Client.send.mockRejectedValue(new Error('S3 delete error'))
 
-      await expect(s3Service.deleteFile(filename)).rejects.toThrow('S3 delete error')
+      await expect(s3Service.deleteFile(prefix + filename)).rejects.toThrow('S3 delete error')
     })
 
     it('should use the bucket name from env config', async () => {
       s3Client.send.mockResolvedValue({})
 
-      await s3Service.deleteFile(filename)
+      await s3Service.deleteFile(prefix + filename)
 
       const [[constructorArg]] = DeleteObjectCommand.mock.calls
       expect(constructorArg.Bucket).toBe('test-bucket')

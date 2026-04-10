@@ -10,7 +10,7 @@ const logFormat = winston.format.combine(
 )
 
 const logger = winston.createLogger({
-  level: env.LOG_LEVEL || 'info',
+  level: env.LOG_LEVEL,
   format: logFormat,
   defaultMeta: { service: 'fastchat-api' },
   transports: [
