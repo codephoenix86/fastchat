@@ -17,6 +17,12 @@ const env = cleanEnv(process.env, {
     choices: ['error', 'warn', 'info', 'debug'],
     default: 'info',
   }),
+  LOG_DIR: str({ default: 'logs' }),
+  LOG_FILE_MAX_SIZE: str({ default: '20m' }),
+  LOG_FILE_MAX_FILES: str({ default: '14d' }),
+
+  POSTGRES_POOL_MAX: num({ default: 20 }),
+  POSTGRES_POOL_IDLE_TIMEOUT_MS: num({ default: 30000 }),
   MAX_FILE_SIZE: num({ default: 5242880 }),
   S3_ENABLED: bool({ default: false }),
 

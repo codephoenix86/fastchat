@@ -8,8 +8,8 @@ const getPool = () => {
   if (!pool || pool.ended) {
     pool = new Pool({
       connectionString: env.POSTGRES_URI,
-      max: 20,
-      idleTimeoutMillis: 30000,
+      max: env.POSTGRES_POOL_MAX,
+      idleTimeoutMillis: env.POSTGRES_POOL_IDLE_TIMEOUT_MS,
     })
     pool.on('error', (err) => {
       logger.error('PostgreSQL connection error', {
