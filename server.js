@@ -2,17 +2,16 @@ require('dotenv').config()
 require('module-alias/register')
 const http = require('http')
 const app = require('@/app')
-const { logger, env, redis, postgres } = require('@config')
+const { logger, env, redis, postgres, mongo } = require('@config')
 const pool = postgres.getPool()
 const client = redis.getClient()
 const { init } = require('@sockets')
-const mongoose = require('mongoose')
 const server = http.createServer(app)
 const io = init(server)
 
 const startServer = async () => {
   try {
-    await Promise.all([mongoose.connect(env.MONGODB_URI), client.ping(), pool.query('SELECT 1')])
+    await Promise.all([mongo.connect(), client.ping(), pool.query('SELECT 1')])
     logger.info('All databases connected')
     server.listen(env.PORT, () => {
       logger.info(`Server listening on port ${env.PORT}`)
@@ -53,7 +52,7 @@ const shutdown = async (signal) => {
     })
     logger.info('WebSockets and HTTP server closed.')
     logger.info('Disconnecting databases...')
-    await Promise.allSettled([mongoose.disconnect(), pool.end(), client.quit()])
+    await Promise.allSettled([mongo.disconnect(), pool.end(), client.quit()])
     logger.info('All databases disconnected.')
     clearTimeout(forceExit)
     logger.info('Graceful shutdown complete. Exiting.')

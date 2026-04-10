@@ -1,10 +1,10 @@
-const { postgres, redis, env } = require('@config')
-const mongoose = require('mongoose')
+const { postgres, redis, mongo } = require('@config')
+const { mongoose } = mongo
 
 const connectTestDB = async () => {
   const pool = postgres.getPool()
   const client = redis.getClient()
-  await Promise.all([pool.query('SELECT 1'), client.ping(), mongoose.connect(env.MONGODB_URI)])
+  await Promise.all([pool.query('SELECT 1'), client.ping(), mongo.connect()])
 }
 const clearTestDB = async () => {
   const pool = postgres.getPool()
@@ -26,7 +26,7 @@ const clearTestDB = async () => {
 const disconnectTestDB = async () => {
   const pool = postgres.getPool()
   const client = redis.getClient()
-  await Promise.all([pool.end(), client.disconnect(), mongoose.disconnect()])
+  await Promise.all([pool.end(), client.disconnect(), mongo.disconnect()])
 }
 
 module.exports = { connectTestDB, clearTestDB, disconnectTestDB }

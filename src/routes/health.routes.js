@@ -1,5 +1,5 @@
 const express = require('express')
-const mongoose = require('mongoose')
+const { mongoose } = require('@config/mongodb')
 const { StatusCodes } = require('http-status-codes')
 const { logger, env } = require('@config')
 const { getPool } = require('@config/postgresql')
