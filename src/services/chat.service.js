@@ -210,19 +210,18 @@ class ChatService {
   }
 
   async getMembers(chatId, userId) {
-    const populateFields = { path: 'participants', select: 'username avatar email bio' }
-    const chat = await chatRepository.findByIdWithPopulate(chatId, populateFields)
+    const chat = await chatRepository.findById(chatId)
 
     if (!chat) {
       throw new NotFoundError('Chat not found')
     }
 
-    // Verify user is a participant
-    if (!chat.participants.some((p) => p === userId)) {
+    if (!chat.participants.includes(userId)) {
       throw new AuthorizationError('You are not a member of this chat', 'NOT_A_MEMBER')
     }
 
-    return chat.participants
+    const members = await Promise.all(chat.participants.map((id) => userRepository.findById(id)))
+    return members.filter(Boolean)
   }
 
   formatChat(chat) {

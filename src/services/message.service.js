@@ -35,7 +35,7 @@ class MessageService {
   }
 
   async getChatMessages(chatId, userId, options = {}) {
-    const { skip = 0, limit = 50, sort = { createdAt: 1 } } = options
+    const { skip = 0, limit = 50, sort = { createdAt: -1 } } = options
 
     // Verify chat exists and user is a participant
     const chat = await chatRepository.findById(chatId)
@@ -64,7 +64,7 @@ class MessageService {
     }
   }
 
-  async getMessageById(messageId, userId) {
+  async getMessageById(messageId, chatId, userId) {
     const populateFields = { path: 'sender', select: 'username avatar' }
     const message = await messageRepository.findByIdWithPopulate(messageId, populateFields)
 
@@ -72,7 +72,10 @@ class MessageService {
       throw new NotFoundError('Message not found')
     }
 
-    // Verify user is a participant of the chat
+    if (message.chat.toString() !== chatId) {
+      throw new NotFoundError('Message not found')
+    }
+
     const chat = await chatRepository.findById(message.chat)
     if (!chat || !chat.participants.includes(userId)) {
       throw new AuthorizationError('You are not a member of this chat', 'NOT_A_MEMBER')

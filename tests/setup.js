@@ -1,5 +1,7 @@
 require('dotenv').config({ path: '.env.test' })
 
+process.env.DISABLE_RATE_LIMIT = 'true'
+
 jest.setTimeout(30000)
 
 jest.mock('@config/logger', () => ({

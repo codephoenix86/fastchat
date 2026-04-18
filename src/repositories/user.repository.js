@@ -295,8 +295,11 @@ class UserRepository {
   }
   async deleteAvatar(userId) {
     this._assertUuid(userId, 'userId')
-    const statement = 'UPDATE profiles SET avatar = NULL WHERE user_id = $1 RETURNING *'
-    const result = await pool.query(statement, [userId])
+    await pool.query('UPDATE profiles SET avatar = NULL WHERE user_id = $1', [userId])
+    const result = await pool.query(
+      'SELECT users.id, users.username, users.email, users.role, profiles.bio, profiles.avatar, profiles.last_seen, users.created_at, profiles.updated_at FROM users LEFT JOIN profiles ON users.id = profiles.user_id WHERE users.id = $1',
+      [userId]
+    )
     return result.rows[0] || null
   }
 }

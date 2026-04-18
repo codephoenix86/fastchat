@@ -110,19 +110,30 @@ describe('messageService.getMessageById', () => {
     messageRepository.findByIdWithPopulate.mockResolvedValue(msg)
     chatRepository.findById.mockResolvedValue(makeChat([USER_ID]))
 
-    const result = await messageService.getMessageById(MSG_ID, USER_ID)
+    const result = await messageService.getMessageById(MSG_ID, CHAT_ID, USER_ID)
     expect(result.id).toBe(MSG_ID)
   })
 
   it('throws NotFoundError when message does not exist', async () => {
     messageRepository.findByIdWithPopulate.mockResolvedValue(null)
-    await expect(messageService.getMessageById(MSG_ID, USER_ID)).rejects.toThrow(NotFoundError)
+    await expect(messageService.getMessageById(MSG_ID, CHAT_ID, USER_ID)).rejects.toThrow(
+      NotFoundError
+    )
+  })
+
+  it('throws NotFoundError when message belongs to a different chat', async () => {
+    messageRepository.findByIdWithPopulate.mockResolvedValue(makeMessage())
+    await expect(messageService.getMessageById(MSG_ID, 'wrong-chat-id', USER_ID)).rejects.toThrow(
+      NotFoundError
+    )
   })
 
   it('throws AuthorizationError when user is not a chat participant', async () => {
     messageRepository.findByIdWithPopulate.mockResolvedValue(makeMessage())
     chatRepository.findById.mockResolvedValue(makeChat([OTHER_ID]))
-    await expect(messageService.getMessageById(MSG_ID, USER_ID)).rejects.toThrow(AuthorizationError)
+    await expect(messageService.getMessageById(MSG_ID, CHAT_ID, USER_ID)).rejects.toThrow(
+      AuthorizationError
+    )
   })
 })
 

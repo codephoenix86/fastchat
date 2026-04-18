@@ -14,8 +14,13 @@ const limitRate = require('@middlewares/rate-limit.middleware')
 
 describe('rate-limit.middleware', () => {
   beforeEach(() => {
+    delete process.env.DISABLE_RATE_LIMIT
     mockRateLimit.mockClear()
     MockRedisStore.mockClear()
+  })
+
+  afterEach(() => {
+    process.env.DISABLE_RATE_LIMIT = 'true'
   })
 
   it('returns an Express middleware function', () => {

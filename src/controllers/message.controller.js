@@ -34,7 +34,11 @@ exports.getMessages = async (req, res) => {
 }
 
 exports.getMessageById = async (req, res) => {
-  const message = await messageService.getMessageById(req.params.messageId, req.user.id)
+  const message = await messageService.getMessageById(
+    req.params.messageId,
+    req.params.chatId,
+    req.user.id
+  )
 
   res.status(StatusCodes.OK).json(new ApiResponse('Message fetched successfully', { message }))
 }
