@@ -1,7 +1,7 @@
 const { ApiResponse } = require('@utils')
 
 describe('ApiResponse', () => {
-  it('should create response with message and data', () => {
+  it('sets success, message, data, and timestamp', () => {
     const response = new ApiResponse('Success', { user: 'test' })
 
     expect(response.success).toBe(true)
@@ -10,21 +10,14 @@ describe('ApiResponse', () => {
     expect(response.timestamp).toBeDefined()
   })
 
-  it('should create response with null data', () => {
-    const response = new ApiResponse('Success')
-
-    expect(response.data).toBeNull()
+  it('sets data to null when omitted', () => {
+    expect(new ApiResponse('Success').data).toBeNull()
   })
 
-  it('should handle paginated data', () => {
+  it('spreads pagination from a paginated data object', () => {
     const paginatedData = {
       data: [{ id: 1 }, { id: 2 }],
-      pagination: {
-        page: 1,
-        limit: 20,
-        total: 100,
-        totalPages: 5,
-      },
+      pagination: { page: 1, limit: 20, total: 100, totalPages: 5 },
     }
 
     const response = new ApiResponse('Success', paginatedData)
@@ -33,38 +26,28 @@ describe('ApiResponse', () => {
     expect(response.pagination).toEqual(paginatedData.pagination)
   })
 
-  it('should set timestamp as ISO string', () => {
+  it('sets timestamp as an ISO string', () => {
     const response = new ApiResponse('Success')
 
     expect(typeof response.timestamp).toBe('string')
     expect(new Date(response.timestamp)).toBeInstanceOf(Date)
   })
 
-  it('should always set success to true', () => {
-    const response = new ApiResponse('Message', null, 404)
-
-    expect(response.success).toBe(true)
+  it('always sets success to true', () => {
+    expect(new ApiResponse('Message', null, 404).success).toBe(true)
   })
 
-  it('should handle empty objects', () => {
-    const response = new ApiResponse('Success', {})
-
-    expect(response.data).toEqual({})
+  it('handles empty object data', () => {
+    expect(new ApiResponse('Success', {}).data).toEqual({})
   })
 
-  it('should handle arrays', () => {
+  it('handles array data', () => {
     const data = [1, 2, 3]
-    const response = new ApiResponse('Success', data)
-
-    expect(response.data).toEqual(data)
+    expect(new ApiResponse('Success', data).data).toEqual(data)
   })
 
-  it('should not spread non-paginated objects to root', () => {
-    const data = {
-      user: { id: 1 },
-      token: 'abc123',
-    }
-
+  it('does not add pagination for non-paginated objects', () => {
+    const data = { user: { id: 1 }, token: 'abc123' }
     const response = new ApiResponse('Success', data)
 
     expect(response.data).toEqual(data)

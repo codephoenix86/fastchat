@@ -411,12 +411,12 @@ describe('Users API', () => {
       const response = await request(app)
         .patch('/api/v1/users/me/password')
         .set('Authorization', `Bearer ${tokens.accessToken}`)
-        .send({ oldPassword: 'Password@123' })
+        .send({ currentPassword: 'Password@123' })
 
       expectError(response, StatusCodes.BAD_REQUEST, 'VALIDATION_FAILED')
     })
 
-    it('should return 401 for incorrect old password', async () => {
+    it('should return 401 for incorrect current password', async () => {
       const { tokens } = await createTestUser()
 
       const response = await request(app)
@@ -437,7 +437,7 @@ describe('Users API', () => {
         .patch('/api/v1/users/me/password')
         .set('Authorization', `Bearer ${tokens.accessToken}`)
         .send({
-          oldPassword: 'Password@123',
+          currentPassword: 'Password@123',
           newPassword: 'weak',
         })
 

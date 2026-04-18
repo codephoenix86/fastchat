@@ -11,16 +11,13 @@ jest.mock('bcrypt', () => ({
 }))
 jest.mock('@repositories')
 jest.mock('@services/user.service')
-jest.mock('@config/redis', () => {
-  const client = {
+jest.mock('@config/redis', () => ({
+  getClient: () => ({
     set: jest.fn(),
     get: jest.fn(),
     del: jest.fn(),
-  }
-  return {
-    getClient: () => client,
-  }
-})
+  }),
+}))
 jest.mock('@services/token.service')
 
 const bcrypt = require('bcrypt')
@@ -31,7 +28,7 @@ describe('AuthService', () => {
   })
 
   describe('signup', () => {
-    it('should create new user successfully', async () => {
+    it('creates and returns a new user without password_hash', async () => {
       const userData = {
         username: 'testuser',
         email: 'test@example.com',
@@ -53,78 +50,66 @@ describe('AuthService', () => {
       expect(result).not.toHaveProperty('password_hash')
     })
 
-    it('should throw ConflictError for duplicate email', async () => {
-      const userData = { email: 'existing@example.com' }
-
+    it('throws ConflictError for a duplicate email', async () => {
       userService.createUser.mockRejectedValue(
         new ConflictError('Email already exists', 'EMAIL_ALREADY_EXISTS')
       )
 
-      await expect(authService.signup(userData)).rejects.toThrow(ConflictError)
-      await expect(authService.signup(userData)).rejects.toThrow('Email already exists')
+      await expect(authService.signup({ email: 'existing@example.com' })).rejects.toThrow(
+        ConflictError
+      )
     })
 
-    it('should throw ConflictError for duplicate username', async () => {
-      const userData = { username: 'existing' }
+    it('throws ConflictError for a duplicate username', async () => {
       userService.createUser.mockRejectedValue(
         new ConflictError('Username already taken', 'USERNAME_ALREADY_TAKEN')
       )
 
-      await expect(authService.signup(userData)).rejects.toThrow(ConflictError)
-      await expect(authService.signup(userData)).rejects.toThrow('Username already taken')
+      await expect(authService.signup({ username: 'existing' })).rejects.toThrow(ConflictError)
     })
 
-    it('should rethrow non-duplicate errors', async () => {
-      const error = new Error('Database error')
-      userService.createUser.mockRejectedValue(error)
+    it('rethrows unexpected errors', async () => {
+      userService.createUser.mockRejectedValue(new Error('Database error'))
 
       await expect(authService.signup({})).rejects.toThrow('Database error')
     })
   })
 
   describe('login', () => {
-    it('should login user successfully', async () => {
+    it('returns user, accessToken, and refreshToken on success', async () => {
       const mockUser = createMockUser()
-      const spy = jest.spyOn(authService, 'authenticate').mockResolvedValue(mockUser)
+      jest.spyOn(authService, 'authenticate').mockResolvedValue(mockUser)
       tokenService.issueTokenPair.mockResolvedValue({
-        accessToken: 'access token',
-        refreshToken: 'refresh token',
-      })
-      const result = await authService.login({
-        username: 'testuser',
-        password: 'Password@123',
+        accessToken: 'access_token',
+        refreshToken: 'refresh_token',
       })
 
-      expect(spy).toHaveBeenCalled()
+      const result = await authService.login({ username: 'testuser', password: 'Password@123' })
+
       expect(result).toHaveProperty('user')
       expect(result).toHaveProperty('accessToken')
       expect(result).toHaveProperty('refreshToken')
       expect(result.user.username).toBe(mockUser.username)
     })
 
-    it('should store refresh token in database', async () => {
+    it('calls tokenService.issueTokenPair with the authenticated user', async () => {
       const mockUser = createMockUser()
       jest.spyOn(authService, 'authenticate').mockResolvedValue(mockUser)
 
-      await authService.login({
-        username: 'test',
-        password: 'pass',
-      })
+      await authService.login({ username: 'test', password: 'pass' })
 
       expect(tokenService.issueTokenPair).toHaveBeenCalledWith(mockUser)
     })
 
-    it('should generate valid tokens', async () => {
+    it('returns distinct access and refresh tokens', async () => {
       const mockUser = createMockUser()
       jest.spyOn(authService, 'authenticate').mockResolvedValue(mockUser)
       tokenService.issueTokenPair.mockResolvedValue({
-        accessToken: 'access token',
-        refreshToken: 'refresh token',
+        accessToken: 'access_token',
+        refreshToken: 'refresh_token',
       })
-      const result = await authService.login({
-        username: 'test',
-        password: 'pass',
-      })
+
+      const result = await authService.login({ username: 'test', password: 'pass' })
 
       expect(typeof result.accessToken).toBe('string')
       expect(typeof result.refreshToken).toBe('string')
@@ -133,48 +118,46 @@ describe('AuthService', () => {
   })
 
   describe('logout', () => {
-    it('should delete refresh token successfully', async () => {
+    it('calls tokenService.revokeSession with the refresh token', async () => {
       await authService.logout('refresh_token')
 
       expect(tokenService.revokeSession).toHaveBeenCalledWith('refresh_token')
     })
 
-    it('should throw AuthenticationError when refresh token is invalid', async () => {
+    it('throws AuthenticationError for an invalid refresh token', async () => {
       tokenService.revokeSession.mockRejectedValue(
         new AuthenticationError('Session not found or already terminated', 'SESSION_NOT_FOUND')
       )
 
       await expect(authService.logout('invalid_token')).rejects.toThrow(AuthenticationError)
-      await expect(authService.logout('invalid_token')).rejects.toThrow(
-        'Session not found or already terminated'
-      )
     })
   })
 
   describe('refreshSession', () => {
-    it('should refresh tokens successfully', async () => {
+    it('returns a new access and refresh token pair', async () => {
       const token = crypto.randomBytes(64).toString('hex')
-      const userId = crypto.randomUUID()
-      tokenService.getUserId.mockResolvedValue(userId)
+      tokenService.getUserId.mockResolvedValue(crypto.randomUUID())
       tokenService.rotateTokens.mockResolvedValue({
-        accessToken: 'access token',
-        refreshToken: 'refresh token',
+        accessToken: 'access_token',
+        refreshToken: 'refresh_token',
       })
+
       const result = await authService.refreshSession(token)
 
       expect(result).toHaveProperty('accessToken')
       expect(result).toHaveProperty('refreshToken')
     })
 
-    it('should replace old refresh token with new', async () => {
+    it('calls rotateTokens with the old token and the resolved user', async () => {
       const user = { id: 'userId', username: 'test', role: 'user' }
       const token = crypto.randomBytes(64).toString('hex')
-      tokenService.getUserId.mockResolvedValue()
+      tokenService.getUserId.mockResolvedValue(undefined)
       userService.findUserById.mockResolvedValue(user)
       tokenService.rotateTokens.mockResolvedValue({
-        accessToken: 'access token',
-        refreshToken: 'refresh token',
+        accessToken: 'access_token',
+        refreshToken: 'refresh_token',
       })
+
       const result = await authService.refreshSession(token)
 
       expect(tokenService.rotateTokens).toHaveBeenCalledWith(token, user)

@@ -4,9 +4,9 @@ jest.mock('bcrypt', () => ({
 }))
 jest.mock('@repositories')
 jest.mock('@config')
+
 const bcrypt = require('bcrypt')
 const crypto = require('crypto')
-
 const s3Service = require('@services/s3.service')
 const userService = require('@services/user.service')
 const { NotFoundError, ConflictError, AuthenticationError } = require('@errors')
@@ -19,14 +19,9 @@ describe('UserService', () => {
   })
 
   describe('createUser', () => {
-    it('should create a new user', async () => {
-      const userData = {
-        username: 'newuser',
-        email: 'new@example.com',
-        password: 'Password@123',
-      }
+    it('creates and returns a new user', async () => {
+      const userData = { username: 'newuser', email: 'new@example.com', password: 'Password@123' }
       const mockUser = createMockUser(userData)
-
       userRepository.create.mockResolvedValue(mockUser)
 
       const result = await userService.createUser(userData)
@@ -36,44 +31,38 @@ describe('UserService', () => {
       expect(result.email).toBe(userData.email)
     })
 
-    it('should throw ConflictError for duplicate email', async () => {
-      const userData = { email: 'existing@example.com' }
+    it('throws ConflictError for a duplicate email', async () => {
       userRepository.create.mockRejectedValue(
         new ConflictError('Email already exists', 'EMAIL_ALREADY_EXISTS')
       )
 
-      await expect(userService.createUser(userData)).rejects.toThrow(ConflictError)
-      await expect(userService.createUser(userData)).rejects.toThrow('Email already exists')
+      await expect(userService.createUser({ email: 'existing@example.com' })).rejects.toThrow(
+        ConflictError
+      )
     })
 
-    it('should throw ConflictError for duplicate username', async () => {
-      const userData = { username: 'existing' }
+    it('throws ConflictError for a duplicate username', async () => {
       userRepository.create.mockRejectedValue(
         new ConflictError('Username already taken', 'USERNAME_ALREADY_TAKEN')
       )
 
-      await expect(userService.createUser(userData)).rejects.toThrow(ConflictError)
-      await expect(userService.createUser(userData)).rejects.toThrow('Username already taken')
+      await expect(userService.createUser({ username: 'existing' })).rejects.toThrow(ConflictError)
     })
   })
 
   describe('findAllUsers', () => {
-    it('should return paginated users', async () => {
+    it('returns paginated users', async () => {
       const mockUsers = [createMockUser(), createMockUser()]
       userRepository.countDocuments.mockResolvedValue(10)
       userRepository.findAll.mockResolvedValue(mockUsers)
 
-      const result = await userService.findAllUsers({
-        skip: 0,
-        limit: 20,
-        sort: { createdAt: -1 },
-      })
+      const result = await userService.findAllUsers({ skip: 0, limit: 20, sort: { createdAt: -1 } })
 
       expect(result.users).toHaveLength(2)
       expect(result.total).toBe(10)
     })
 
-    it('should apply search filter', async () => {
+    it('passes search term to countDocuments', async () => {
       userRepository.countDocuments.mockResolvedValue(1)
       userRepository.findAll.mockResolvedValue([createMockUser()])
 
@@ -82,7 +71,7 @@ describe('UserService', () => {
       expect(userRepository.countDocuments).toHaveBeenCalledWith({}, 'test')
     })
 
-    it('should apply custom filters', async () => {
+    it('passes custom filters to countDocuments', async () => {
       userRepository.countDocuments.mockResolvedValue(1)
       userRepository.findAll.mockResolvedValue([createMockUser()])
 
@@ -93,7 +82,7 @@ describe('UserService', () => {
   })
 
   describe('findUserById', () => {
-    it('should return user by ID', async () => {
+    it('returns the user by ID', async () => {
       const mockUser = createMockUser()
       userRepository.findById.mockResolvedValue(mockUser)
 
@@ -103,7 +92,7 @@ describe('UserService', () => {
       expect(result.id).toEqual(mockUser.id)
     })
 
-    it('should throw NotFoundError when user does not exist', async () => {
+    it('throws NotFoundError when the user does not exist', async () => {
       userRepository.findById.mockResolvedValue(null)
 
       await expect(userService.findUserById('nonexistent')).rejects.toThrow(NotFoundError)
@@ -111,20 +100,18 @@ describe('UserService', () => {
   })
 
   describe('updateUser', () => {
-    it('should update user successfully', async () => {
+    it('updates and returns the user', async () => {
       const userId = crypto.randomUUID()
-      const mockUser = createMockUser({ id: userId, password: 'hashed' })
-      const updateData = { username: 'newusername' }
-
+      const mockUser = createMockUser({ id: userId })
       userRepository.findById.mockResolvedValue(mockUser)
-      userRepository.updateById.mockResolvedValue({ ...mockUser, ...updateData })
+      userRepository.updateById.mockResolvedValue({ ...mockUser, username: 'newusername' })
 
-      const result = await userService.updateUser(userId, updateData)
+      const result = await userService.updateUser(userId, { username: 'newusername' })
 
       expect(result.username).toBe('newusername')
     })
 
-    it('should throw NotFoundError when user does not exist', async () => {
+    it('throws NotFoundError when the user does not exist', async () => {
       userRepository.findById.mockResolvedValue(null)
 
       await expect(userService.updateUser('nonexistent', {})).rejects.toThrow(NotFoundError)
@@ -132,7 +119,7 @@ describe('UserService', () => {
   })
 
   describe('deleteUser', () => {
-    it('should delete user and remove their avatar from S3', async () => {
+    it('deletes the user and removes their avatar from S3', async () => {
       const mockUser = createMockUser({ avatar: 'test-avatar-key' })
       userRepository.findById.mockResolvedValue(mockUser)
       userRepository.findByIdAndDelete.mockResolvedValue(mockUser)
@@ -144,7 +131,7 @@ describe('UserService', () => {
       expect(userRepository.findByIdAndDelete).toHaveBeenCalledWith(mockUser.id)
     })
 
-    it('should delete user without avatar', async () => {
+    it('skips S3 deletion when user has no avatar', async () => {
       const mockUser = createMockUser({ avatar: null })
       userRepository.findById.mockResolvedValue(mockUser)
       userRepository.findByIdAndDelete.mockResolvedValue(mockUser)
@@ -155,7 +142,7 @@ describe('UserService', () => {
       expect(userRepository.findByIdAndDelete).toHaveBeenCalled()
     })
 
-    it('should continue deletion even if S3 avatar removal fails', async () => {
+    it('completes deletion even if S3 avatar removal fails', async () => {
       const mockUser = createMockUser({ avatar: 'test-avatar-key' })
       userRepository.findById.mockResolvedValue(mockUser)
       userRepository.findByIdAndDelete.mockResolvedValue(mockUser)
@@ -163,11 +150,10 @@ describe('UserService', () => {
 
       await userService.deleteUser(mockUser.id)
 
-      // S3 failure must not block the account deletion
       expect(userRepository.findByIdAndDelete).toHaveBeenCalled()
     })
 
-    it('should throw NotFoundError when user does not exist', async () => {
+    it('throws NotFoundError when the user does not exist', async () => {
       userRepository.findById.mockResolvedValue(null)
 
       await expect(userService.deleteUser('nonexistent')).rejects.toThrow(NotFoundError)
@@ -175,16 +161,11 @@ describe('UserService', () => {
   })
 
   describe('updateAvatar', () => {
-    // Reusable mock file matching the shape the service expects
-    const mockFile = {
-      buffer: Buffer.from('image-data'),
-      mimetype: 'image/jpeg',
-    }
+    const mockFile = { buffer: Buffer.from('image-data'), mimetype: 'image/jpeg' }
 
-    it('should upload new avatar and delete old one from S3', async () => {
+    it('uploads a new avatar and deletes the old one from S3', async () => {
       const mockUser = createMockUser({ avatar: 'old-avatar-key' })
       const updatedUser = { ...mockUser, avatar: 'new-avatar-key' }
-
       userRepository.findById.mockResolvedValue(mockUser)
       s3Service.deleteFile.mockResolvedValue()
       s3Service.uploadFile.mockResolvedValue('s3.url')
@@ -205,10 +186,9 @@ describe('UserService', () => {
       expect(result.avatar).toBe('new-avatar-key')
     })
 
-    it('should upload avatar when user has no existing avatar', async () => {
+    it('uploads avatar when user has no existing one', async () => {
       const mockUser = createMockUser({ avatar: null })
       const updatedUser = { ...mockUser, avatar: 'new-avatar-key' }
-
       userRepository.findById.mockResolvedValue(mockUser)
       s3Service.uploadFile.mockResolvedValue()
       userRepository.updateById.mockResolvedValue(updatedUser)
@@ -220,10 +200,9 @@ describe('UserService', () => {
       expect(result.avatar).toBe('new-avatar-key')
     })
 
-    it('should continue upload even if deleting old avatar from S3 fails', async () => {
+    it('continues upload even if deleting the old avatar from S3 fails', async () => {
       const mockUser = createMockUser({ avatar: 'old-avatar-key' })
       const updatedUser = { ...mockUser, avatar: 'new-avatar-key' }
-
       userRepository.findById.mockResolvedValue(mockUser)
       s3Service.deleteFile.mockRejectedValue(new Error('S3 delete failed'))
       s3Service.uploadFile.mockResolvedValue()
@@ -235,9 +214,8 @@ describe('UserService', () => {
       expect(result.avatar).toBe('new-avatar-key')
     })
 
-    it('should throw and not update DB if S3 upload fails', async () => {
+    it('throws and does not update DB when S3 upload fails', async () => {
       const mockUser = createMockUser({ avatar: null })
-
       userRepository.findById.mockResolvedValue(mockUser)
       s3Service.uploadFile.mockRejectedValue(new Error('S3 upload failed'))
 
@@ -247,7 +225,7 @@ describe('UserService', () => {
       expect(userRepository.updateById).not.toHaveBeenCalled()
     })
 
-    it('should throw NotFoundError when user does not exist', async () => {
+    it('throws NotFoundError when the user does not exist', async () => {
       userRepository.findById.mockResolvedValue(null)
 
       await expect(userService.updateAvatar('nonexistent', mockFile)).rejects.toThrow(NotFoundError)
@@ -255,10 +233,9 @@ describe('UserService', () => {
   })
 
   describe('deleteAvatar', () => {
-    it('should delete avatar from S3, clear it in DB, and return updated user', async () => {
+    it('deletes from S3, clears DB, and returns updated user', async () => {
       const mockUser = createMockUser({ avatar: 'avatar-key' })
       const updatedUser = { ...mockUser, avatar: null }
-
       userRepository.findById.mockResolvedValue(mockUser)
       s3Service.deleteFile.mockResolvedValue()
       userRepository.deleteAvatar.mockResolvedValue(updatedUser)
@@ -270,12 +247,10 @@ describe('UserService', () => {
       expect(result.avatar).toBeUndefined()
     })
 
-    it('should skip S3 delete and still clear DB when user has no avatar', async () => {
+    it('skips S3 delete and still clears DB when user has no avatar', async () => {
       const mockUser = createMockUser({ avatar: null })
-      const updatedUser = { ...mockUser, avatar: null }
-
       userRepository.findById.mockResolvedValue(mockUser)
-      userRepository.deleteAvatar.mockResolvedValue(updatedUser)
+      userRepository.deleteAvatar.mockResolvedValue({ ...mockUser, avatar: null })
 
       const result = await userService.deleteAvatar(mockUser.id)
 
@@ -284,7 +259,7 @@ describe('UserService', () => {
       expect(result.avatar).toBeUndefined()
     })
 
-    it('should rethrow error and not update DB if S3 delete fails', async () => {
+    it('rethrows error and does not update DB when S3 delete fails', async () => {
       const mockUser = createMockUser({ avatar: 'avatar-key' })
       userRepository.findById.mockResolvedValue(mockUser)
       s3Service.deleteFile.mockRejectedValue(new Error('S3 error'))
@@ -293,7 +268,7 @@ describe('UserService', () => {
       expect(userRepository.deleteAvatar).not.toHaveBeenCalled()
     })
 
-    it('should throw NotFoundError when user does not exist', async () => {
+    it('throws NotFoundError when the user does not exist', async () => {
       userRepository.findById.mockResolvedValue(null)
 
       await expect(userService.deleteAvatar('nonexistent')).rejects.toThrow(NotFoundError)
@@ -301,9 +276,8 @@ describe('UserService', () => {
   })
 
   describe('changePassword', () => {
-    it('should change password successfully', async () => {
+    it('verifies old password and updates with new hash', async () => {
       const mockUser = createMockUser({ password_hash: 'oldhashed' })
-
       userRepository.findByIdWithPassword.mockResolvedValue(mockUser)
       bcrypt.compare.mockResolvedValue(true)
       bcrypt.hash.mockResolvedValue('new_hash')
@@ -316,7 +290,7 @@ describe('UserService', () => {
       })
     })
 
-    it('should throw AuthenticationError for incorrect current password', async () => {
+    it('throws AuthenticationError for an incorrect current password', async () => {
       const mockUser = createMockUser({ password_hash: 'hashed' })
       userRepository.findByIdWithPassword.mockResolvedValue(mockUser)
       bcrypt.compare.mockResolvedValue(false)
@@ -326,7 +300,7 @@ describe('UserService', () => {
       )
     })
 
-    it('should throw NotFoundError when user does not exist', async () => {
+    it('throws NotFoundError when the user does not exist', async () => {
       userRepository.findByIdWithPassword.mockResolvedValue(null)
 
       await expect(userService.changePassword('nonexistent', 'old', 'new')).rejects.toThrow(

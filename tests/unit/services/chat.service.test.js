@@ -15,7 +15,7 @@ describe('ChatService', () => {
   })
 
   describe('createChat', () => {
-    it('should create private chat successfully', async () => {
+    it('creates a private chat', async () => {
       const userId1 = crypto.randomUUID()
       const userId2 = crypto.randomUUID()
       const mockChat = createMockChat({
@@ -27,10 +27,7 @@ describe('ChatService', () => {
       chatRepository.create.mockResolvedValue(mockChat)
 
       const result = await chatService.createChat(
-        {
-          participants: [userId2],
-          type: CHAT_TYPES.PRIVATE,
-        },
+        { participants: [userId2], type: CHAT_TYPES.PRIVATE },
         userId1
       )
 
@@ -38,7 +35,7 @@ describe('ChatService', () => {
       expect(result.type).toBe(CHAT_TYPES.PRIVATE)
     })
 
-    it('should create group chat with admin', async () => {
+    it('creates a group chat with admin set', async () => {
       const adminId = crypto.randomUUID()
       const userId = crypto.randomUUID()
       const mockChat = createMockChat({
@@ -46,42 +43,27 @@ describe('ChatService', () => {
         admin: adminId,
         groupName: 'Test Group',
       })
-
       userRepository.countDocuments.mockResolvedValue(2)
       chatRepository.create.mockResolvedValue(mockChat)
 
       const result = await chatService.createChat(
-        {
-          participants: [userId],
-          type: CHAT_TYPES.GROUP,
-          groupName: 'Test Group',
-        },
+        { participants: [userId], type: CHAT_TYPES.GROUP, groupName: 'Test Group' },
         adminId
       )
 
       expect(result.type).toBe(CHAT_TYPES.GROUP)
       expect(chatRepository.create).toHaveBeenCalledWith(
-        expect.objectContaining({
-          admin: adminId,
-          groupName: 'Test Group',
-        })
+        expect.objectContaining({ admin: adminId, groupName: 'Test Group' })
       )
     })
 
-    it('should add creator to participants automatically', async () => {
+    it('automatically adds creator to participants', async () => {
       const creatorId = crypto.randomUUID()
       const userId = crypto.randomUUID()
-
       userRepository.countDocuments.mockResolvedValue(2)
       chatRepository.create.mockResolvedValue(createMockChat())
 
-      await chatService.createChat(
-        {
-          participants: [userId],
-          type: CHAT_TYPES.PRIVATE,
-        },
-        creatorId
-      )
+      await chatService.createChat({ participants: [userId], type: CHAT_TYPES.PRIVATE }, creatorId)
 
       expect(chatRepository.create).toHaveBeenCalledWith(
         expect.objectContaining({
@@ -92,30 +74,23 @@ describe('ChatService', () => {
   })
 
   describe('getUserChats', () => {
-    it('should return user chats with pagination', async () => {
+    it('returns chats with pagination', async () => {
       const userId = crypto.randomUUID()
-      const mockChats = [createMockChat(), createMockChat()]
-
       chatRepository.countDocuments.mockResolvedValue(10)
-      chatRepository.findAllWithPopulate.mockResolvedValue(mockChats)
+      chatRepository.findAllWithPopulate.mockResolvedValue([createMockChat(), createMockChat()])
 
-      const result = await chatService.getUserChats(userId, {
-        skip: 0,
-        limit: 20,
-      })
+      const result = await chatService.getUserChats(userId, { skip: 0, limit: 20 })
 
       expect(result.chats).toHaveLength(2)
       expect(result.total).toBe(10)
     })
 
-    it('should apply type filter', async () => {
+    it('passes type filter to countDocuments', async () => {
       const userId = crypto.randomUUID()
       chatRepository.countDocuments.mockResolvedValue(5)
       chatRepository.findAllWithPopulate.mockResolvedValue([])
 
-      await chatService.getUserChats(userId, {
-        filter: { type: CHAT_TYPES.GROUP },
-      })
+      await chatService.getUserChats(userId, { filter: { type: CHAT_TYPES.GROUP } })
 
       expect(chatRepository.countDocuments).toHaveBeenCalledWith({
         participants: userId,
@@ -125,14 +100,10 @@ describe('ChatService', () => {
   })
 
   describe('getChatById', () => {
-    it('should return chat by ID', async () => {
+    it('returns the chat for a participant', async () => {
       const chatId = crypto.randomUUID()
       const userId = crypto.randomUUID()
-      const mockChat = createMockChat({
-        _id: chatId,
-        participants: [userId],
-      })
-
+      const mockChat = createMockChat({ _id: chatId, participants: [userId] })
       chatRepository.findById.mockResolvedValue(mockChat)
 
       const result = await chatService.getChatById(chatId, userId)
@@ -140,17 +111,14 @@ describe('ChatService', () => {
       expect(result.id).toEqual(chatId)
     })
 
-    it('should throw NotFoundError when chat does not exist', async () => {
+    it('throws NotFoundError when chat does not exist', async () => {
       chatRepository.findById.mockResolvedValue(null)
 
       await expect(chatService.getChatById('nonexistent', 'userId')).rejects.toThrow(NotFoundError)
     })
 
-    it('should throw AuthorizationError when user is not a participant', async () => {
-      const mockChat = createMockChat({
-        participants: [crypto.randomUUID()],
-      })
-
+    it('throws AuthorizationError when user is not a participant', async () => {
+      const mockChat = createMockChat({ participants: [crypto.randomUUID()] })
       chatRepository.findById.mockResolvedValue(mockChat)
 
       await expect(chatService.getChatById('chatId', crypto.randomUUID())).rejects.toThrow(
@@ -160,19 +128,15 @@ describe('ChatService', () => {
   })
 
   describe('updateChat', () => {
-    it('should update group chat as admin', async () => {
+    it('updates a group chat as admin', async () => {
       const adminId = crypto.randomUUID()
       const mockChat = createMockChat({
         type: CHAT_TYPES.GROUP,
         admin: adminId,
         participants: [adminId],
       })
-
       chatRepository.findById.mockResolvedValue(mockChat)
-      chatRepository.findByIdAndUpdate.mockResolvedValue({
-        ...mockChat,
-        groupName: 'Updated Name',
-      })
+      chatRepository.findByIdAndUpdate.mockResolvedValue({ ...mockChat, groupName: 'Updated Name' })
 
       const result = await chatService.updateChat(mockChat._id, adminId.toString(), {
         groupName: 'Updated Name',
@@ -181,30 +145,21 @@ describe('ChatService', () => {
       expect(result.name).toBe('Updated Name')
     })
 
-    it('should throw AuthorizationError when non-admin tries to update', async () => {
+    it('throws AuthorizationError when a non-admin tries to update', async () => {
       const adminId = crypto.randomUUID()
-      const nonAdminId = crypto.randomUUID()
-      const mockChat = createMockChat({
-        type: CHAT_TYPES.GROUP,
-        admin: adminId,
-      })
-
+      const mockChat = createMockChat({ type: CHAT_TYPES.GROUP, admin: adminId })
       chatRepository.findById.mockResolvedValue(mockChat)
 
       await expect(
-        chatService.updateChat('chatId', nonAdminId.toString(), { groupName: 'New' })
+        chatService.updateChat('chatId', crypto.randomUUID().toString(), { groupName: 'New' })
       ).rejects.toThrow(AuthorizationError)
     })
   })
 
   describe('deleteChat', () => {
-    it('should delete group chat as admin', async () => {
+    it('deletes a group chat as admin', async () => {
       const adminId = crypto.randomUUID()
-      const mockChat = createMockChat({
-        type: CHAT_TYPES.GROUP,
-        admin: adminId,
-      })
-
+      const mockChat = createMockChat({ type: CHAT_TYPES.GROUP, admin: adminId })
       chatRepository.findById.mockResolvedValue(mockChat)
       chatRepository.findByIdAndDelete.mockResolvedValue(mockChat)
 
@@ -215,7 +170,7 @@ describe('ChatService', () => {
   })
 
   describe('addMember', () => {
-    it('should add member to group chat as admin', async () => {
+    it('adds a member to a group chat as admin', async () => {
       const adminId = crypto.randomUUID()
       const newMemberId = crypto.randomUUID()
       const mockChat = createMockChat({
@@ -223,7 +178,6 @@ describe('ChatService', () => {
         admin: adminId,
         participants: [adminId],
       })
-
       chatRepository.findById.mockResolvedValue(mockChat)
       chatRepository.findByIdAndUpdate.mockResolvedValue(mockChat)
 
@@ -231,19 +185,16 @@ describe('ChatService', () => {
 
       expect(chatRepository.findByIdAndUpdate).toHaveBeenCalledWith(
         'chatId',
-        expect.objectContaining({
-          $addToSet: { participants: newMemberId.toString() },
-        })
+        expect.objectContaining({ $addToSet: { participants: newMemberId.toString() } })
       )
     })
 
-    it('should allow user to add themselves', async () => {
+    it('allows a user to add themselves', async () => {
       const userId = crypto.randomUUID()
       const mockChat = createMockChat({
         type: CHAT_TYPES.GROUP,
         participants: [crypto.randomUUID()],
       })
-
       chatRepository.findById.mockResolvedValue(mockChat)
       chatRepository.findByIdAndUpdate.mockResolvedValue(mockChat)
 
@@ -252,7 +203,7 @@ describe('ChatService', () => {
       expect(chatRepository.findByIdAndUpdate).toHaveBeenCalled()
     })
 
-    it('should throw ConflictError when member already exists', async () => {
+    it('throws ConflictError when member already exists', async () => {
       const adminId = crypto.randomUUID()
       const existingMemberId = crypto.randomUUID()
       const mockChat = createMockChat({
@@ -260,7 +211,6 @@ describe('ChatService', () => {
         admin: adminId,
         participants: [adminId, existingMemberId],
       })
-
       chatRepository.findById.mockResolvedValue(mockChat)
 
       await expect(
@@ -270,13 +220,12 @@ describe('ChatService', () => {
   })
 
   describe('removeMember', () => {
-    it('should allow user to remove themselves', async () => {
+    it('allows a user to remove themselves', async () => {
       const userId = crypto.randomUUID()
       const mockChat = createMockChat({
         type: CHAT_TYPES.GROUP,
         participants: [userId, crypto.randomUUID()],
       })
-
       chatRepository.findById.mockResolvedValue(mockChat)
       chatRepository.findByIdAndUpdate.mockResolvedValue(mockChat)
 
@@ -285,13 +234,9 @@ describe('ChatService', () => {
       expect(chatRepository.findByIdAndUpdate).toHaveBeenCalled()
     })
 
-    it('should delete chat when last member leaves', async () => {
+    it('deletes the chat when the last member leaves', async () => {
       const userId = crypto.randomUUID()
-      const mockChat = createMockChat({
-        type: CHAT_TYPES.GROUP,
-        participants: [userId],
-      })
-
+      const mockChat = createMockChat({ type: CHAT_TYPES.GROUP, participants: [userId] })
       chatRepository.findById.mockResolvedValue(mockChat)
       chatRepository.findByIdAndUpdate.mockResolvedValue(mockChat)
       chatRepository.findByIdAndDelete.mockResolvedValue(mockChat)
@@ -301,14 +246,13 @@ describe('ChatService', () => {
       expect(chatRepository.findByIdAndDelete).toHaveBeenCalled()
     })
 
-    it('should throw ConflictError when admin tries to leave without transfer', async () => {
+    it('throws ConflictError when admin tries to leave without transferring ownership', async () => {
       const adminId = crypto.randomUUID()
       const mockChat = createMockChat({
         type: CHAT_TYPES.GROUP,
         admin: adminId,
         participants: [adminId, crypto.randomUUID()],
       })
-
       chatRepository.findById.mockResolvedValue(mockChat)
 
       await expect(

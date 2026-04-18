@@ -12,9 +12,6 @@ jest.mock('@config', () => ({
 
 const jwt = require('jsonwebtoken')
 const { tokenRepository } = require('@repositories')
-const { AuthenticationError } = require('@errors')
-
-// Re-require after mocks are in place
 const tokenService = require('@services/token.service')
 
 const mockUser = {
@@ -30,13 +27,13 @@ beforeEach(() => {
 })
 
 describe('tokenService.issueTokenPair', () => {
-  it('returns accessToken and refreshToken', async () => {
+  it('returns accessToken and refreshToken strings', async () => {
     const { accessToken, refreshToken } = await tokenService.issueTokenPair(mockUser)
     expect(typeof accessToken).toBe('string')
     expect(typeof refreshToken).toBe('string')
   })
 
-  it('accessToken is a valid JWT containing id, username, role, jti', async () => {
+  it('accessToken contains id, username, role, and jti', async () => {
     const { accessToken } = await tokenService.issueTokenPair(mockUser)
     const payload = jwt.decode(accessToken)
     expect(payload.id).toBe(mockUser.id)
@@ -45,7 +42,7 @@ describe('tokenService.issueTokenPair', () => {
     expect(payload.jti).toBeDefined()
   })
 
-  it('calls tokenRepository.saveRefreshToken with refreshToken, userId, and TTL seconds', async () => {
+  it('calls tokenRepository.saveRefreshToken with token, userId, and TTL', async () => {
     const { refreshToken } = await tokenService.issueTokenPair(mockUser)
     expect(tokenRepository.saveRefreshToken).toHaveBeenCalledWith(
       refreshToken,
@@ -54,7 +51,7 @@ describe('tokenService.issueTokenPair', () => {
     )
   })
 
-  it('each call produces a unique refreshToken', async () => {
+  it('produces a unique refreshToken on each call', async () => {
     const { refreshToken: rt1 } = await tokenService.issueTokenPair(mockUser)
     const { refreshToken: rt2 } = await tokenService.issueTokenPair(mockUser)
     expect(rt1).not.toBe(rt2)
@@ -62,49 +59,40 @@ describe('tokenService.issueTokenPair', () => {
 })
 
 describe('tokenService.verifyAccessToken', () => {
-  it('returns decoded payload for a valid token', async () => {
+  it('returns the decoded payload for a valid token', async () => {
     const { accessToken } = await tokenService.issueTokenPair(mockUser)
     const payload = tokenService.verifyAccessToken(accessToken)
     expect(payload.id).toBe(mockUser.id)
   })
 
   it('throws AuthenticationError with INVALID_TOKEN for a malformed token', () => {
-    expect(() => tokenService.verifyAccessToken('not.a.valid.jwt')).toThrow(AuthenticationError)
-    try {
-      tokenService.verifyAccessToken('not.a.valid.jwt')
-    } catch (err) {
-      expect(err.code).toBe('INVALID_TOKEN')
-    }
+    expect(() => tokenService.verifyAccessToken('not.a.valid.jwt')).toThrow(
+      expect.objectContaining({ code: 'INVALID_TOKEN' })
+    )
   })
 
   it('throws AuthenticationError with TOKEN_EXPIRED for an expired token', () => {
     const expired = jwt.sign({ id: mockUser.id }, 'test-secret-at-least-32-chars-long!!', {
       expiresIn: '-1s',
     })
-    try {
-      tokenService.verifyAccessToken(expired)
-    } catch (err) {
-      expect(err).toBeInstanceOf(AuthenticationError)
-      expect(err.code).toBe('TOKEN_EXPIRED')
-    }
+    expect(() => tokenService.verifyAccessToken(expired)).toThrow(
+      expect.objectContaining({ code: 'TOKEN_EXPIRED' })
+    )
   })
 })
 
 describe('tokenService.getUserId', () => {
-  it('returns userId when token exists in repository', async () => {
+  it('returns userId when the token exists in the repository', async () => {
     tokenRepository.getUserIdByToken.mockResolvedValue(mockUser.id)
     const userId = await tokenService.getUserId('valid-refresh-token')
     expect(userId).toBe(mockUser.id)
   })
 
-  it('throws AuthenticationError with REFRESH_TOKEN_REVOKED when token does not exist', async () => {
+  it('throws AuthenticationError with REFRESH_TOKEN_REVOKED when token is missing', async () => {
     tokenRepository.getUserIdByToken.mockResolvedValue(null)
-    await expect(tokenService.getUserId('unknown-token')).rejects.toThrow(AuthenticationError)
-    try {
-      await tokenService.getUserId('unknown-token')
-    } catch (err) {
-      expect(err.code).toBe('REFRESH_TOKEN_REVOKED')
-    }
+    await expect(tokenService.getUserId('unknown-token')).rejects.toThrow(
+      expect.objectContaining({ code: 'REFRESH_TOKEN_REVOKED' })
+    )
   })
 })
 
@@ -120,14 +108,14 @@ describe('tokenService.rotateTokens', () => {
     expect(typeof refreshToken).toBe('string')
   })
 
-  it('returns different tokens than the old one', async () => {
+  it('returns a different refreshToken than the old one', async () => {
     const { refreshToken } = await tokenService.rotateTokens('old-token', mockUser)
     expect(refreshToken).not.toBe('old-token')
   })
 })
 
 describe('tokenService.revokeSession', () => {
-  it('deletes the refresh token from repository when it exists', async () => {
+  it('deletes the refresh token when it exists', async () => {
     tokenRepository.getUserIdByToken.mockResolvedValue(mockUser.id)
     await tokenService.revokeSession('valid-token')
     expect(tokenRepository.deleteRefreshToken).toHaveBeenCalledWith('valid-token')
@@ -135,11 +123,8 @@ describe('tokenService.revokeSession', () => {
 
   it('throws AuthenticationError with SESSION_NOT_FOUND when token is missing', async () => {
     tokenRepository.getUserIdByToken.mockResolvedValue(null)
-    await expect(tokenService.revokeSession('ghost-token')).rejects.toThrow(AuthenticationError)
-    try {
-      await tokenService.revokeSession('ghost-token')
-    } catch (err) {
-      expect(err.code).toBe('SESSION_NOT_FOUND')
-    }
+    await expect(tokenService.revokeSession('ghost-token')).rejects.toThrow(
+      expect.objectContaining({ code: 'SESSION_NOT_FOUND' })
+    )
   })
 })

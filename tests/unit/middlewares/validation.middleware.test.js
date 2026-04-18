@@ -34,60 +34,49 @@ describe('validation.middleware', () => {
       expect(req.body.name).toBe('Alice')
     })
 
-    it('mutates req.body in place with coerced values', () => {
-      const schema = Joi.object({
-        body: Joi.object({ age: Joi.number().required() }),
-      })
+    it('coerces values in place', () => {
+      const schema = Joi.object({ body: Joi.object({ age: Joi.number().required() }) })
       const req = makeReq({ body: { age: '25' } })
 
       validate(schema)(req, {}, makeNext())
 
-      expect(typeof req.body.age).toBe('number')
       expect(req.body.age).toBe(25)
     })
   })
 
   describe('invalid input', () => {
-    it('throws ValidationError when a required field is missing', () => {
+    it('throws ValidationError for a missing required field', () => {
       const schema = Joi.object({ body: Joi.object({ name: Joi.string().required() }) })
-      const req = makeReq({ body: {} })
-
-      expect(() => validate(schema)(req, {}, makeNext())).toThrow(ValidationError)
+      expect(() => validate(schema)(makeReq({ body: {} }), {}, makeNext())).toThrow(ValidationError)
     })
 
     it('throws with code VALIDATION_FAILED', () => {
       const schema = Joi.object({ body: Joi.object({ name: Joi.string().required() }) })
-      const req = makeReq({ body: {} })
-
-      try {
-        validate(schema)(req, {}, makeNext())
-      } catch (err) {
-        expect(err.code).toBe('VALIDATION_FAILED')
-      }
+      expect(() => validate(schema)(makeReq({ body: {} }), {}, makeNext())).toThrow(
+        expect.objectContaining({ code: 'VALIDATION_FAILED' })
+      )
     })
 
-    it('collects all errors (abortEarly: false), not just the first', () => {
+    it('collects all errors when abortEarly is false', () => {
       const schema = Joi.object({
         body: Joi.object({
           name: Joi.string().required(),
           email: Joi.string().email().required(),
         }),
       })
-      const req = makeReq({ body: {} })
 
-      try {
-        validate(schema)(req, {}, makeNext())
-      } catch (err) {
-        expect(err.errors.length).toBeGreaterThan(1)
-      }
+      expect(() => validate(schema)(makeReq({ body: {} }), {}, makeNext())).toThrow(
+        expect.objectContaining({
+          errors: expect.arrayContaining([expect.anything(), expect.anything()]),
+        })
+      )
     })
 
-    it('each error object has path and message properties', () => {
+    it('each error has path and message properties', () => {
       const schema = Joi.object({ body: Joi.object({ name: Joi.string().required() }) })
-      const req = makeReq({ body: {} })
 
       try {
-        validate(schema)(req, {}, makeNext())
+        validate(schema)(makeReq({ body: {} }), {}, makeNext())
       } catch (err) {
         err.errors.forEach((e) => {
           expect(e).toHaveProperty('path')
@@ -97,17 +86,13 @@ describe('validation.middleware', () => {
     })
 
     it('deduplicates errors for the same path', () => {
-      const schema = Joi.object({
-        body: Joi.object({ name: Joi.string().min(2).max(1) }),
-      })
-      const req = makeReq({ body: { name: 'X' } })
+      const schema = Joi.object({ body: Joi.object({ name: Joi.string().min(2).max(1) }) })
 
       try {
-        validate(schema)(req, {}, makeNext())
+        validate(schema)(makeReq({ body: { name: 'X' } }), {}, makeNext())
       } catch (err) {
         const paths = err.errors.map((e) => e.path)
-        const uniquePaths = [...new Set(paths)]
-        expect(paths.length).toBe(uniquePaths.length)
+        expect(paths.length).toBe([...new Set(paths)].length)
       }
     })
   })

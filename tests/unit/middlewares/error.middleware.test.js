@@ -29,44 +29,38 @@ const makeRes = () => {
 
 describe('error.middleware — operational errors', () => {
   it('uses the error statusCode', () => {
-    const err = new AuthorizationError('Forbidden')
     const res = makeRes()
-    handleError(err, makeReq(), res, jest.fn())
+    handleError(new AuthorizationError('Forbidden'), makeReq(), res, jest.fn())
     expect(res.status).toHaveBeenCalledWith(StatusCodes.FORBIDDEN)
   })
 
   it('sets success: false', () => {
-    const err = new AuthorizationError('Forbidden')
     const res = makeRes()
-    handleError(err, makeReq(), res, jest.fn())
+    handleError(new AuthorizationError('Forbidden'), makeReq(), res, jest.fn())
     expect(res.json.mock.calls[0][0].success).toBe(false)
   })
 
-  it('includes error code from the error object', () => {
-    const err = new AuthorizationError('Forbidden', 'NOT_ALLOWED')
+  it('includes error code', () => {
     const res = makeRes()
-    handleError(err, makeReq(), res, jest.fn())
+    handleError(new AuthorizationError('Forbidden', 'NOT_ALLOWED'), makeReq(), res, jest.fn())
     expect(res.json.mock.calls[0][0].error.code).toBe('NOT_ALLOWED')
   })
 
   it('includes error message', () => {
-    const err = new AuthorizationError('You cannot do that')
     const res = makeRes()
-    handleError(err, makeReq(), res, jest.fn())
+    handleError(new AuthorizationError('You cannot do that'), makeReq(), res, jest.fn())
     expect(res.json.mock.calls[0][0].error.message).toBe('You cannot do that')
   })
 
   it('includes requestId from req.id', () => {
-    const err = new AuthorizationError('Forbidden')
     const res = makeRes()
-    handleError(err, makeReq({ id: 'my-req-id' }), res, jest.fn())
+    handleError(new AuthorizationError('Forbidden'), makeReq({ id: 'my-req-id' }), res, jest.fn())
     expect(res.json.mock.calls[0][0].requestId).toBe('my-req-id')
   })
 
   it('includes timestamp', () => {
-    const err = new AuthorizationError('Forbidden')
     const res = makeRes()
-    handleError(err, makeReq(), res, jest.fn())
+    handleError(new AuthorizationError('Forbidden'), makeReq(), res, jest.fn())
     expect(res.json.mock.calls[0][0].timestamp).toBeDefined()
   })
 
@@ -76,46 +70,40 @@ describe('error.middleware — operational errors', () => {
     ])
     const res = makeRes()
     handleError(err, makeReq(), res, jest.fn())
-    expect(res.json.mock.calls[0][0].error.details).toBeDefined()
     expect(res.json.mock.calls[0][0].error.details).toHaveLength(1)
   })
 
   it('omits details when err.errors is absent', () => {
-    const err = new AuthorizationError('Forbidden')
     const res = makeRes()
-    handleError(err, makeReq(), res, jest.fn())
+    handleError(new AuthorizationError('Forbidden'), makeReq(), res, jest.fn())
     expect(res.json.mock.calls[0][0].error.details).toBeUndefined()
   })
 })
 
 describe('error.middleware — non-operational errors', () => {
   it('responds with 500', () => {
-    const err = new Error('Unexpected crash')
     const res = makeRes()
-    handleError(err, makeReq(), res, jest.fn())
+    handleError(new Error('Unexpected crash'), makeReq(), res, jest.fn())
     expect(res.status).toHaveBeenCalledWith(StatusCodes.INTERNAL_SERVER_ERROR)
   })
 
   it('uses INTERNAL_SERVER_ERROR code', () => {
-    const err = new Error('Crash')
     const res = makeRes()
-    handleError(err, makeReq(), res, jest.fn())
+    handleError(new Error('Crash'), makeReq(), res, jest.fn())
     expect(res.json.mock.calls[0][0].error.code).toBe('INTERNAL_SERVER_ERROR')
   })
 
-  it('exposes actual message in non-production', () => {
+  it('exposes the actual message outside production', () => {
     mockEnv.NODE_ENV = 'test'
-    const err = new Error('Detailed crash info')
     const res = makeRes()
-    handleError(err, makeReq(), res, jest.fn())
+    handleError(new Error('Detailed crash info'), makeReq(), res, jest.fn())
     expect(res.json.mock.calls[0][0].error.message).toBe('Detailed crash info')
   })
 
-  it('hides message in production', () => {
+  it('hides the message in production', () => {
     mockEnv.NODE_ENV = 'production'
-    const err = new Error('Detailed crash info')
     const res = makeRes()
-    handleError(err, makeReq(), res, jest.fn())
+    handleError(new Error('Detailed crash info'), makeReq(), res, jest.fn())
     expect(res.json.mock.calls[0][0].error.message).toBe('Internal server error')
     mockEnv.NODE_ENV = 'test'
   })
@@ -124,18 +112,16 @@ describe('error.middleware — non-operational errors', () => {
 describe('error.middleware — stack trace', () => {
   it('includes stack in development', () => {
     mockEnv.NODE_ENV = 'development'
-    const err = new AuthorizationError('Forbidden')
     const res = makeRes()
-    handleError(err, makeReq(), res, jest.fn())
+    handleError(new AuthorizationError('Forbidden'), makeReq(), res, jest.fn())
     expect(res.json.mock.calls[0][0].stack).toBeDefined()
     mockEnv.NODE_ENV = 'test'
   })
 
   it('omits stack in production', () => {
     mockEnv.NODE_ENV = 'production'
-    const err = new AuthorizationError('Forbidden')
     const res = makeRes()
-    handleError(err, makeReq(), res, jest.fn())
+    handleError(new AuthorizationError('Forbidden'), makeReq(), res, jest.fn())
     expect(res.json.mock.calls[0][0].stack).toBeUndefined()
     mockEnv.NODE_ENV = 'test'
   })

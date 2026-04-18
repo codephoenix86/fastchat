@@ -19,7 +19,7 @@ const { PutObjectCommand, DeleteObjectCommand } = require('@aws-sdk/client-s3')
 const { s3, env } = require('@config')
 const s3Service = require('@services/s3.service')
 
-describe('S3Service', () => {
+describe('s3Service', () => {
   const s3Client = { send: jest.fn() }
 
   beforeEach(() => {
@@ -32,7 +32,7 @@ describe('S3Service', () => {
     const filename = 'avatars/user-123.jpg'
     const mimetype = 'image/jpeg'
 
-    it('should send a PutObjectCommand with correct params', async () => {
+    it('sends a PutObjectCommand with correct params', async () => {
       s3Client.send.mockResolvedValue({})
 
       await s3Service.uploadFile(buffer, filename, mimetype)
@@ -49,7 +49,7 @@ describe('S3Service', () => {
       )
     })
 
-    it('should throw when s3Client.send rejects', async () => {
+    it('throws when s3Client.send rejects', async () => {
       s3Client.send.mockRejectedValue(new Error('S3 upload error'))
 
       await expect(s3Service.uploadFile(buffer, filename, mimetype)).rejects.toThrow(
@@ -57,7 +57,7 @@ describe('S3Service', () => {
       )
     })
 
-    it('should use the bucket name from env config', async () => {
+    it('uses the bucket name from env config', async () => {
       s3Client.send.mockResolvedValue({})
 
       await s3Service.uploadFile(buffer, filename, mimetype)
@@ -70,7 +70,8 @@ describe('S3Service', () => {
   describe('deleteFile', () => {
     const filename = 'avatars/user-123.jpg'
     const prefix = `https://${env.S3_BUCKET_NAME}.s3.${env.AWS_REGION}.amazonaws.com/`
-    it('should send a DeleteObjectCommand with correct params', async () => {
+
+    it('sends a DeleteObjectCommand with correct params', async () => {
       s3Client.send.mockResolvedValue({})
 
       await s3Service.deleteFile(prefix + filename)
@@ -85,13 +86,13 @@ describe('S3Service', () => {
       )
     })
 
-    it('should throw when s3Client.send rejects', async () => {
+    it('throws when s3Client.send rejects', async () => {
       s3Client.send.mockRejectedValue(new Error('S3 delete error'))
 
       await expect(s3Service.deleteFile(prefix + filename)).rejects.toThrow('S3 delete error')
     })
 
-    it('should use the bucket name from env config', async () => {
+    it('uses the bucket name from env config', async () => {
       s3Client.send.mockResolvedValue({})
 
       await s3Service.deleteFile(prefix + filename)

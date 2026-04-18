@@ -12,6 +12,7 @@ const {
   expectSuccess,
   expectPagination,
 } = require('./helpers')
+const { Message } = require('@models')
 const { CHAT_TYPES } = require('@constants')
 
 describe('Messages API', () => {
@@ -155,12 +156,12 @@ describe('Messages API', () => {
     })
 
     it('should sort messages by createdAt descending by default', async () => {
-      const [user1, user2, user3] = await createTestUsers(3)
+      const [user1, user2] = await createTestUsers(2)
       const chat = await createTestChat(user1.user, [user2.user._id])
 
       const msg1 = await createTestMessage(chat, user1.user, { content: 'First' })
       const msg2 = await createTestMessage(chat, user2.user, { content: 'Second' })
-      const msg3 = await createTestMessage(chat, user3.user, { content: 'Third' })
+      const msg3 = await createTestMessage(chat, user1.user, { content: 'Third' })
 
       const response = await request(app)
         .get(`/api/v1/chats/${chat._id}/messages`)
@@ -203,7 +204,6 @@ describe('Messages API', () => {
         .set('Authorization', `Bearer ${user1.tokens.accessToken}`)
       expectSuccess(response, StatusCodes.OK)
       expect(response.body.data[0].sender).toBeDefined()
-      // expect(response.body.data[0].sender.username).toBe(user1.user.username)
     })
   })
 
@@ -336,8 +336,7 @@ describe('Messages API', () => {
 
       expectSuccess(response, StatusCodes.OK, 'Message deleted successfully')
 
-      // Verify message is deleted
-      const deletedMessage = await require('@models').Message.findById(message._id)
+      const deletedMessage = await Message.findById(message._id)
       expect(deletedMessage).toBeNull()
     })
 

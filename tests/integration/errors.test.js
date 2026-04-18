@@ -1,7 +1,7 @@
 const request = require('supertest')
 const app = require('@/app')
 const { connectTestDB, clearTestDB, disconnectTestDB } = require('@tests/helpers')
-const { createTestUser, expectError } = require('./helpers')
+const { createTestUser, createTestUsers, createTestChat, expectError } = require('./helpers')
 const { StatusCodes } = require('http-status-codes')
 
 describe('Error Handling', () => {
@@ -142,7 +142,7 @@ describe('Error Handling', () => {
       const response = await request(app)
         .patch('/api/v1/users/me')
         .set('Authorization', `Bearer ${tokens.accessToken}`)
-        .send({ newUsername: 12345 }) // Should be string
+        .send({ username: 12345 })
 
       expectError(response, StatusCodes.BAD_REQUEST, 'VALIDATION_FAILED')
     })
@@ -178,8 +178,8 @@ describe('Error Handling', () => {
 
   describe('Authorization Errors', () => {
     it('should return 403 when accessing resource without permission', async () => {
-      const [user1, user2, user3] = await require('./helpers').createTestUsers(3)
-      const chat = await require('./helpers').createTestChat(user1.user, [user2.user.id])
+      const [user1, user2, user3] = await createTestUsers(3)
+      const chat = await createTestChat(user1.user, [user2.user.id])
 
       const response = await request(app)
         .get(`/api/v1/chats/${chat._id}`)
@@ -189,8 +189,8 @@ describe('Error Handling', () => {
     })
 
     it('should return 403 when non-admin tries admin action', async () => {
-      const [user1, user2] = await require('./helpers').createTestUsers(2)
-      const chat = await require('./helpers').createTestChat(user1.user, [user2.user._id], {
+      const [user1, user2] = await createTestUsers(2)
+      const chat = await createTestChat(user1.user, [user2.user._id], {
         type: 'group',
         groupName: 'Test',
       })
@@ -358,11 +358,10 @@ describe('Error Handling', () => {
     it('should support correct HTTP methods for each endpoint', async () => {
       const { tokens } = await createTestUser()
 
-      // PATCH should work
       const patchResponse = await request(app)
         .patch('/api/v1/users/me')
         .set('Authorization', `Bearer ${tokens.accessToken}`)
-        .send({ newBio: 'Test' })
+        .send({ bio: 'Test' })
 
       expect(patchResponse.status).not.toBe(404)
       expect(patchResponse.status).not.toBe(405)

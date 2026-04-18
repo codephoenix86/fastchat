@@ -18,6 +18,7 @@ describe('Health API', () => {
   afterAll(async () => {
     await disconnectTestDB()
   })
+
   describe('GET /health', () => {
     it('should return health status with database connected', async () => {
       const response = await request(app).get('/health')

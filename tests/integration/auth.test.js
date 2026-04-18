@@ -13,6 +13,7 @@ const {
 } = require('./helpers')
 const { postgres } = require('@config')
 const pool = postgres.getPool()
+
 describe('Auth API', () => {
   beforeAll(async () => {
     await connectTestDB()
@@ -42,7 +43,6 @@ describe('Auth API', () => {
       expect(response.body.data.user.role).toBe('user')
       expect(response.body.data.user.password).toBeUndefined()
 
-      // Verify user exists in database
       const result = await pool.query(
         'SELECT EXISTS(SELECT 1 FROM users WHERE username = $1 AND email = $2)',
         [userData.username, userData.email]
@@ -51,13 +51,11 @@ describe('Auth API', () => {
     })
 
     it('should return 409 for duplicate email', async () => {
-      // Create a user that already exists in the DB
       const { user } = await createTestUser()
 
-      // signup with same email - should fail
       const response = await request(app).post('/api/v1/auth/signup').send({
-        username: generateUsername(), // Different username
-        email: user.email, // Same email
+        username: generateUsername(),
+        email: user.email,
         password: 'Password@123',
       })
 
@@ -66,13 +64,11 @@ describe('Auth API', () => {
     })
 
     it('should return 409 for duplicate username', async () => {
-      // Create a user that already exists in the DB
       const { user } = await createTestUser()
 
-      // signup with same username - should fail
       const response = await request(app).post('/api/v1/auth/signup').send({
-        username: user.username, // Same username
-        email: generateEmail(), // Different email
+        username: user.username,
+        email: generateEmail(),
         password: 'Password@123',
       })
 
@@ -248,7 +244,7 @@ describe('Auth API', () => {
     it('should store refresh token in database', async () => {
       const { user } = await createTestUser()
 
-      client.flushall()
+      await client.flushall()
 
       const response = await request(app).post('/api/v1/auth/login').send({
         username: user.username,
@@ -275,7 +271,6 @@ describe('Auth API', () => {
 
       expectSuccess(response, StatusCodes.OK, 'User logged out successfully')
 
-      // Verify refresh token is removed from database
       const [key] = await client.keys(`rt:${user.id}:*`)
       const result = await client.get(key)
 
@@ -330,7 +325,6 @@ describe('Auth API', () => {
       expect(response.body.data.accessToken).not.toBe(tokens.accessToken)
       expect(response.body.data.refreshToken).not.toBe(tokens.refreshToken)
 
-      // Verify old token is removed
       const [key] = await client.keys(`rt:${user.id}:*`)
       const newToken = await client.get(key)
 
@@ -346,7 +340,6 @@ describe('Auth API', () => {
     it('should return 401 for non-existent refresh token', async () => {
       const { tokens } = await createTestUser()
 
-      // Delete the refresh token from database
       await client.flushall()
 
       const response = await request(app)

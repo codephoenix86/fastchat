@@ -10,6 +10,7 @@ const {
   expectSuccess,
   expectPagination,
 } = require('./helpers')
+const { Chat } = require('@models')
 const { CHAT_TYPES } = require('@constants')
 const { StatusCodes } = require('http-status-codes')
 
@@ -380,8 +381,7 @@ describe('Chats API', () => {
 
       expectSuccess(response, StatusCodes.OK, 'Chat deleted successfully')
 
-      // Verify chat is deleted
-      const deletedChat = await require('@models').Chat.findById(chat._id)
+      const deletedChat = await Chat.findById(chat._id)
       expect(deletedChat).toBeNull()
     })
 
@@ -592,7 +592,7 @@ describe('Chats API', () => {
       expectSuccess(response, StatusCodes.OK, 'Member removed successfully')
 
       // Verify chat is deleted
-      const deletedChat = await require('@models').Chat.findById(chat._id)
+      const deletedChat = await Chat.findById(chat._id)
       expect(deletedChat).toBeNull()
     })
 
