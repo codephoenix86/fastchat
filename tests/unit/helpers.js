@@ -1,52 +1,15 @@
 const crypto = require('crypto')
-/**
- * Mock user data factory
- */
-exports.createMockUser = (overrides = {}) => ({
-  id: crypto.randomUUID(),
-  username: 'testuser',
-  email: 'test@example.com',
-  password_hash: '$2b$10$abcdefghijklmnopqrstuvwxyz',
-  role: 'user',
-  avatar: null,
-  bio: 'Test bio',
-  lastSeen: new Date(),
-  createdAt: new Date(),
-  updatedAt: new Date(),
-  ...overrides,
-})
+const { buildUser } = require('@tests/factories/user.factory')
+const { buildChat } = require('@tests/factories/chat.factory')
+const { buildMessage } = require('@tests/factories/message.factory')
 
-/**
- * Mock chat data factory
- */
-exports.createMockChat = (overrides = {}) => ({
-  _id: crypto.randomUUID(),
-  type: 'private',
-  participants: [crypto.randomUUID(), crypto.randomUUID()],
-  createdAt: new Date(),
-  updatedAt: new Date(),
-  ...overrides,
-})
+const createMockUser = (overrides = {}) => buildUser(overrides)
 
-/**
- * Mock message data factory
- */
-exports.createMockMessage = (overrides = {}) => ({
-  _id: crypto.randomUUID(),
-  content: 'Test message',
-  sender: crypto.randomUUID(),
-  chat: crypto.randomUUID(),
-  status: 'sent',
-  type: 'text',
-  createdAt: new Date(),
-  updatedAt: new Date(),
-  ...overrides,
-})
+const createMockChat = (overrides = {}) => buildChat(overrides)
 
-/**
- * Mock refresh token data factory
- */
-exports.createMockRefreshToken = (overrides = {}) => ({
+const createMockMessage = (overrides = {}) => buildMessage(overrides)
+
+const createMockRefreshToken = (overrides = {}) => ({
   _id: crypto.randomUUID(),
   user: crypto.randomUUID(),
   refreshToken: 'mock_refresh_token',
@@ -54,10 +17,7 @@ exports.createMockRefreshToken = (overrides = {}) => ({
   ...overrides,
 })
 
-/**
- * Mock Express request
- */
-exports.mockRequest = (overrides = {}) => ({
+const mockRequest = (overrides = {}) => ({
   body: {},
   params: {},
   query: {},
@@ -67,10 +27,7 @@ exports.mockRequest = (overrides = {}) => ({
   ...overrides,
 })
 
-/**
- * Mock Express response
- */
-exports.mockResponse = () => {
+const mockResponse = () => {
   const res = {}
   res.status = jest.fn().mockReturnValue(res)
   res.json = jest.fn().mockReturnValue(res)
@@ -78,7 +35,14 @@ exports.mockResponse = () => {
   return res
 }
 
-/**
- * Mock Express next function
- */
-exports.mockNext = () => jest.fn()
+const mockNext = () => jest.fn()
+
+module.exports = {
+  createMockUser,
+  createMockChat,
+  createMockMessage,
+  createMockRefreshToken,
+  mockRequest,
+  mockResponse,
+  mockNext,
+}
