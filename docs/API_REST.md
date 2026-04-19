@@ -2,15 +2,13 @@
 
 Complete HTTP API documentation for fastchat.
 
-## Base URL
-
-```
-http://localhost:3000
-```
+**Base URL:** `http://localhost:3000` (development) · `https://fastchat.duckdns.org` (live)
 
 ---
 
 ## Response Format
+
+All endpoints return JSON with a consistent envelope.
 
 ### Success
 
@@ -20,21 +18,6 @@ http://localhost:3000
   "message": "Operation successful",
   "data": {},
   "timestamp": "2024-01-21T10:30:00.000Z"
-}
-```
-
-### Error
-
-```json
-{
-  "success": false,
-  "error": {
-    "code": "ERROR_CODE",
-    "message": "Human-readable description",
-    "details": []
-  },
-  "timestamp": "2024-01-21T10:30:00.000Z",
-  "requestId": "uuid"
 }
 ```
 
@@ -57,26 +40,78 @@ http://localhost:3000
 }
 ```
 
+### Error
+
+```json
+{
+  "success": false,
+  "error": {
+    "code": "VALIDATION_FAILED",
+    "message": "Invalid request data",
+    "details": [{ "path": "body.email", "message": "\"email\" must be a valid email" }]
+  },
+  "timestamp": "2024-01-21T10:30:00.000Z",
+  "requestId": "uuid"
+}
+```
+
 ---
 
-## Authentication
+## Authentication Scheme
 
 fastchat uses a two-token scheme:
 
-- **Access token** — short-lived JWT (`15m` default), sent in the `Authorization: Bearer` header.
-- **Refresh token** — long-lived opaque token (`7d` default), stored in Redis, sent as a `application/x-www-form-urlencoded` body field.
+| Token             | Type                          | Lifetime              | Transport                                                         |
+| ----------------- | ----------------------------- | --------------------- | ----------------------------------------------------------------- |
+| **Access token**  | JWT (HS256)                   | 15 min (configurable) | `Authorization: Bearer <token>` header                            |
+| **Refresh token** | opaque hex string (128 chars) | 7 days (configurable) | `refresh_token` field in `application/x-www-form-urlencoded` body |
 
-### POST `/api/v1/auth/signup`
+Refresh tokens are stored in Redis and are rotated on every use — the old token is deleted and a new pair is issued atomically.
 
-Register a new user account. Rate-limited to 5 requests per 15 minutes.
+---
 
-**Request body** (`application/json`)
+## Health Check
 
-| Field      | Type   | Rules                                                                    |
-| ---------- | ------ | ------------------------------------------------------------------------ |
-| `username` | string | 3–20 chars, must start with a letter, letters/digits/`_`/`.` only        |
-| `email`    | string | valid email format                                                       |
-| `password` | string | min 8 chars, requires uppercase, lowercase, digit, and one of `@$!%*?&#` |
+### `GET /health`
+
+Verify server and database connectivity. No authentication required.
+
+**Response `200`** — all databases healthy
+
+```json
+{
+  "uptime": 123.4,
+  "timestamp": 1706000000000,
+  "status": "OK",
+  "environment": "development",
+  "version": "1.0.0",
+  "checks": {
+    "mongodb": "connected",
+    "postgresql": "connected",
+    "redis": "connected"
+  }
+}
+```
+
+**Response `503`** — one or more databases unreachable; `status` is `"DEGRADED"` and the affected `checks` entry shows the error message.
+
+---
+
+## Auth
+
+All auth endpoints are **rate-limited to 5 requests per 15 minutes per IP**.
+
+### `POST /api/v1/auth/signup`
+
+Register a new user account.
+
+**Request body** `application/json`
+
+| Field      | Type   | Rules                                                                                     |
+| ---------- | ------ | ----------------------------------------------------------------------------------------- |
+| `username` | string | 3–20 chars; must start with a letter; letters, digits, `_`, `.` only                      |
+| `email`    | string | valid email format                                                                        |
+| `password` | string | min 8 chars; requires at least one uppercase, one lowercase, one digit, one of `@$!%*?&#` |
 
 **Response `201`**
 
@@ -99,13 +134,13 @@ Register a new user account. Rate-limited to 5 requests per 15 minutes.
 
 ---
 
-### POST `/api/v1/auth/login`
+### `POST /api/v1/auth/login`
 
-Authenticate and receive tokens. Rate-limited to 5 requests per 15 minutes.
+Authenticate and receive a token pair.
 
-**Request body** (`application/json`)
+**Request body** `application/json`
 
-Provide either `username` or `email`, but not both.
+Provide `username` **or** `email` (not both).
 
 ```json
 { "username": "alice", "password": "Password@123" }
@@ -129,17 +164,15 @@ Provide either `username` or `email`, but not both.
 }
 ```
 
-**Errors** — `400` validation failed · `401` invalid credentials
+**Errors** — `400` validation failed · `401` invalid credentials (`INVALID_CREDENTIALS`)
 
 ---
 
-### POST `/api/v1/auth/logout`
+### `POST /api/v1/auth/logout`
 
-Revoke the refresh token. The access token is not invalidated server-side (it expires naturally).
+Revoke the refresh token. The access token expires naturally (it is not invalidated server-side).
 
-**Headers** — `Authorization: Bearer <accessToken>` (optional, but recommended)
-
-**Request body** (`application/x-www-form-urlencoded`)
+**Request body** `application/x-www-form-urlencoded`
 
 ```
 refresh_token=<opaque>
@@ -151,15 +184,15 @@ refresh_token=<opaque>
 { "success": true, "message": "User logged out successfully" }
 ```
 
-**Errors** — `400` missing refresh token · `401` token not found or already revoked
+**Errors** — `400` missing token · `401` token not found or already revoked (`SESSION_NOT_FOUND`)
 
 ---
 
-### POST `/api/v1/auth/refresh`
+### `POST /api/v1/auth/refresh`
 
-Rotate the token pair. The old refresh token is deleted; a new pair is issued.
+Rotate the token pair. The submitted refresh token is invalidated and a new pair is issued.
 
-**Request body** (`application/x-www-form-urlencoded`)
+**Request body** `application/x-www-form-urlencoded`
 
 ```
 refresh_token=<opaque>
@@ -178,43 +211,43 @@ refresh_token=<opaque>
 }
 ```
 
-**Errors** — `400` missing token · `401` token not found or expired
+**Errors** — `400` missing token · `401` token not found or expired (`REFRESH_TOKEN_REVOKED`)
 
 ---
 
 ## Users
 
-All protected routes require `Authorization: Bearer <accessToken>`.
+Protected routes require `Authorization: Bearer <accessToken>`.
 
-### GET `/api/v1/users`
+### `GET /api/v1/users`
 
-List users. No authentication required.
+List all users. **No authentication required.**
 
 **Query parameters**
 
-| Param    | Description                                                                | Default       |
-| -------- | -------------------------------------------------------------------------- | ------------- |
-| `page`   | Page number                                                                | `1`           |
-| `limit`  | Items per page (max 100)                                                   | `20`          |
-| `search` | Search in username and email                                               | —             |
-| `role`   | Filter by role (`user` \| `admin`)                                         | —             |
-| `sort`   | Comma-separated fields, prefix `-` for descending (`-created_at,username`) | `-created_at` |
+| Param    | Description                                                                     | Default       |
+| -------- | ------------------------------------------------------------------------------- | ------------- |
+| `page`   | Page number                                                                     | `1`           |
+| `limit`  | Items per page (max 100)                                                        | `20`          |
+| `search` | Full-text search on `username` and `email`                                      | —             |
+| `role`   | Filter by role (`user` \| `admin`)                                              | —             |
+| `sort`   | Comma-separated fields; prefix `-` for descending (e.g. `-created_at,username`) | `-created_at` |
 
-**Response `200`** — paginated user array (no `password_hash`)
+**Response `200`** — paginated array of user objects (no `password_hash`)
 
 ---
 
-### GET `/api/v1/users/:id`
+### `GET /api/v1/users/:userId`
 
-Get a user by their UUID. No authentication required.
+Get a user by UUID. **No authentication required.**
 
 **Errors** — `400` invalid UUID format · `404` user not found
 
 ---
 
-### GET `/api/v1/users/me`
+### `GET /api/v1/users/me`
 
-Get the currently authenticated user's full profile.
+Get the currently authenticated user's full profile, including avatar URL, bio, and last seen timestamp.
 
 **Response `200`**
 
@@ -238,34 +271,32 @@ Get the currently authenticated user's full profile.
 }
 ```
 
-> The `avatar` field is a full S3 URL when set, or omitted from the response when no avatar has been uploaded.
+The `avatar` field is omitted from the response when no avatar has been uploaded.
 
 **Errors** — `401` missing or invalid token
 
 ---
 
-### PATCH `/api/v1/users/me`
+### `PATCH /api/v1/users/me`
 
-Update profile fields. Provide at least one field.
+Update profile fields. At least one field must be provided.
 
-**Request body** (`application/json`)
+**Request body** `application/json`
 
 | Field      | Type   | Rules                    |
 | ---------- | ------ | ------------------------ |
 | `username` | string | 3–20 chars, valid format |
 | `bio`      | string | max 200 chars            |
 
-At least one of the above fields must be present.
-
 **Response `200`** — updated user object
 
-**Errors** — `400` validation failed · `409` username already taken
+**Errors** — `400` validation failed or no fields provided · `409` username already taken
 
 ---
 
-### DELETE `/api/v1/users/me`
+### `DELETE /api/v1/users/me`
 
-Permanently delete the authenticated user's account. Also deletes their avatar from S3 if one is set (S3 deletion failure is logged but does not block account deletion).
+Permanently delete the authenticated user's account. If an avatar is set, it is also deleted from S3 (S3 deletion failure is logged but does not block account deletion).
 
 **Response `200`**
 
@@ -275,13 +306,14 @@ Permanently delete the authenticated user's account. Also deletes their avatar f
 
 ---
 
-### POST `/api/v1/users/me/avatar`
+### `POST /api/v1/users/me/avatar`
 
-Upload a profile picture. The file is stored in S3; the returned `avatar` field is the full S3 URL. Any previously set avatar is deleted from S3 before the new one is uploaded.
+Upload a profile picture. Requires `S3_ENABLED=true`. Any existing avatar is deleted from S3 before the new one is stored. The stored value is the full S3 URL.
 
-**Request** — `multipart/form-data` with field name `avatar`
+**Request** `multipart/form-data` — field name: `avatar`
 
-Accepted types: `image/jpeg`, `image/jpg`, `image/png`, `image/gif`. Max size: 5 MB.
+Accepted MIME types: `image/jpeg`, `image/jpg`, `image/png`, `image/gif`  
+Max file size: 5 MB (configurable via `MAX_FILE_SIZE`)
 
 **Response `200`**
 
@@ -302,9 +334,9 @@ Accepted types: `image/jpeg`, `image/jpg`, `image/png`, `image/gif`. Max size: 5
 
 ---
 
-### DELETE `/api/v1/users/me/avatar`
+### `DELETE /api/v1/users/me/avatar`
 
-Remove the current avatar. Deletes the file from S3 and clears the field in the database. Returns an error if the S3 deletion fails. Safe to call even when no avatar is set (no-op in that case).
+Remove the current avatar. Deletes the file from S3 and clears the `profiles.avatar` column. Safe to call even when no avatar is set.
 
 **Response `200`**
 
@@ -318,16 +350,16 @@ Remove the current avatar. Deletes the file from S3 and clears the field in the 
 
 ---
 
-### PATCH `/api/v1/users/me/password`
+### `PATCH /api/v1/users/me/password`
 
-Change the account password.
+Change the account password. The current password must be provided for verification.
 
-**Request body** (`application/json`)
+**Request body** `application/json`
 
-| Field             | Type   | Rules                                                                  |
-| ----------------- | ------ | ---------------------------------------------------------------------- |
-| `currentPassword` | string | required                                                               |
-| `newPassword`     | string | min 8 chars, same complexity rules as signup, must differ from current |
+| Field             | Type   | Rules                                                                           |
+| ----------------- | ------ | ------------------------------------------------------------------------------- |
+| `currentPassword` | string | required                                                                        |
+| `newPassword`     | string | min 8 chars; same complexity rules as signup; must differ from current password |
 
 **Response `200`**
 
@@ -335,7 +367,7 @@ Change the account password.
 { "success": true, "message": "Password changed successfully" }
 ```
 
-**Errors** — `400` validation failed · `401` current password incorrect
+**Errors** — `400` validation failed · `401` current password incorrect (`INVALID_PASSWORD`)
 
 ---
 
@@ -343,26 +375,26 @@ Change the account password.
 
 All chat endpoints require `Authorization: Bearer <accessToken>`.
 
-### GET `/api/v1/chats`
+### `GET /api/v1/chats`
 
 Get the authenticated user's chats.
 
 **Query parameters**
 
-| Param   | Description          | Default      |
-| ------- | -------------------- | ------------ |
-| `page`  | Page number          | `1`          |
-| `limit` | Max 100              | `20`         |
-| `type`  | `private` or `group` | —            |
-| `sort`  | e.g. `-createdAt`    | `-createdAt` |
+| Param   | Description                                | Default      |
+| ------- | ------------------------------------------ | ------------ |
+| `page`  | Page number                                | `1`          |
+| `limit` | Items per page (max 100)                   | `20`         |
+| `type`  | Filter by chat type (`private` \| `group`) | —            |
+| `sort`  | e.g. `-createdAt`                          | `-createdAt` |
 
-**Response `200`** — paginated chat array
+**Response `200`** — paginated array of chat objects
 
 ---
 
-### POST `/api/v1/chats`
+### `POST /api/v1/chats`
 
-Create a new chat.
+Create a new chat. The authenticated user is automatically added as a participant (and as admin for group chats).
 
 **Private chat** — `participants` must contain exactly one other user ID.
 
@@ -373,7 +405,7 @@ Create a new chat.
 }
 ```
 
-**Group chat** — `participants` must contain at least one other user ID. Creator is added automatically as admin.
+**Group chat** — `participants` must contain at least one other user ID. `groupName` is required.
 
 ```json
 {
@@ -385,9 +417,9 @@ Create a new chat.
 
 **Validation rules**
 
-- All participant IDs must be valid UUIDs and exist in the database.
-- Duplicate participant IDs are rejected.
-- `groupName` is required for group chats and forbidden for private chats.
+- All participant IDs must be valid UUIDs and exist in the database
+- Duplicate participant IDs are rejected
+- `groupName` is required for group chats and must be absent for private chats
 
 **Response `201`**
 
@@ -413,40 +445,40 @@ Create a new chat.
 
 ---
 
-### GET `/api/v1/chats/:chatId`
+### `GET /api/v1/chats/:chatId`
 
 Get a single chat by ID. The requesting user must be a participant.
 
-**Errors** — `400` invalid UUID · `403` not a participant · `404` chat not found
+**Errors** — `403` not a participant · `404` chat not found
 
 ---
 
-### PATCH `/api/v1/chats/:chatId`
+### `PATCH /api/v1/chats/:chatId`
 
-Update a group chat. Admin only. Provide at least one field.
+Update a group chat. **Admin only.** Provide at least one field.
 
-**Request body** (`application/json`)
+**Request body** `application/json`
 
-| Field       | Type          | Notes                           |
-| ----------- | ------------- | ------------------------------- |
-| `groupName` | string        | 1–50 chars                      |
-| `admin`     | string (UUID) | Must be an existing participant |
+| Field       | Type          | Notes                                                            |
+| ----------- | ------------- | ---------------------------------------------------------------- |
+| `groupName` | string        | 1–50 chars                                                       |
+| `admin`     | string (UUID) | Must be an existing participant — use this to transfer ownership |
 
-**Errors** — `400` private chat or no fields · `403` not admin · `404` not found
-
----
-
-### DELETE `/api/v1/chats/:chatId`
-
-Delete a group chat. Admin only.
-
-**Errors** — `400` private chat · `403` not admin · `404` not found
+**Errors** — `400` private chat or no fields provided · `403` not admin · `404` chat not found
 
 ---
 
-### GET `/api/v1/chats/:chatId/members`
+### `DELETE /api/v1/chats/:chatId`
 
-Get the full member list. User must be a participant.
+Delete a group chat. **Admin only.**
+
+**Errors** — `400` private chat · `403` not admin · `404` chat not found
+
+---
+
+### `GET /api/v1/chats/:chatId/members`
+
+Get the full member list. The requesting user must be a participant.
 
 **Response `200`**
 
@@ -464,25 +496,27 @@ Get the full member list. User must be a participant.
 
 ---
 
-### POST `/api/v1/chats/:chatId/members/:userId`
+### `POST /api/v1/chats/:chatId/members/:userId`
 
-Add a member to a group chat. Admin only.
+Add a member to a group chat. **Admin only.**
 
-**Errors** — `400` private chat · `403` not admin · `404` user not found · `409` already a member
-
----
-
-### DELETE `/api/v1/chats/:chatId/members/me`
-
-Leave a group chat. If the admin tries to leave while other members remain, they must transfer ownership first (see `PATCH /chats/:chatId`). The chat is deleted automatically when the last member leaves.
-
-**Errors** — `400` private chat · `409` admin must transfer ownership first
+**Errors** — `400` private chat · `403` not admin · `404` user not found · `409` user already a member
 
 ---
 
-### DELETE `/api/v1/chats/:chatId/members/:userId`
+### `DELETE /api/v1/chats/:chatId/members/me`
 
-Remove another member from a group chat. Admin only. Same auto-delete rule applies.
+Leave a group chat (self-remove).
+
+If the admin attempts to leave while other members remain, they must first transfer ownership via `PATCH /api/v1/chats/:chatId` (setting a new `admin`). The chat is deleted automatically when the last member leaves.
+
+**Errors** — `400` private chat · `409` admin must transfer ownership before leaving (`ADMIN_TRANSFER_REQUIRED`)
+
+---
+
+### `DELETE /api/v1/chats/:chatId/members/:userId`
+
+Remove a specific member from a group chat. **Admin only.** The auto-delete rule applies — the chat is deleted if the last member is removed.
 
 **Errors** — `400` private chat · `403` not admin · `404` user not found
 
@@ -490,13 +524,14 @@ Remove another member from a group chat. Admin only. Same auto-delete rule appli
 
 ## Messages
 
-All message endpoints require `Authorization: Bearer <accessToken>`. Rate-limited to 100 requests per 15 minutes.
+All message endpoints require `Authorization: Bearer <accessToken>`.  
+**Rate-limited to 100 requests per 15 minutes per IP.**
 
-### POST `/api/v1/chats/:chatId/messages`
+### `POST /api/v1/chats/:chatId/messages`
 
-Send a message. A `message:new` Socket.io event is broadcast to the chat room immediately.
+Send a message. A `message:new` Socket.io event is broadcast to all sockets in the chat room immediately after persistence.
 
-**Request body** (`application/json`)
+**Request body** `application/json`
 
 ```json
 { "content": "Hello, world!" }
@@ -529,81 +564,70 @@ Send a message. A `message:new` Socket.io event is broadcast to the chat room im
 
 ---
 
-### GET `/api/v1/chats/:chatId/messages`
+### `GET /api/v1/chats/:chatId/messages`
 
-Fetch paginated messages. Default sort is ascending by `createdAt` (oldest first).
+Fetch paginated messages for a chat. Default sort is oldest-first (`createdAt` ascending).
 
 **Query parameters** — `page`, `limit` (max 100, default 50), `sort`
 
----
-
-### GET `/api/v1/chats/:chatId/messages/:messageId`
-
-Fetch a single message. User must be a participant.
+**Errors** — `403` not a participant · `404` chat not found
 
 ---
 
-### PATCH `/api/v1/chats/:chatId/messages/:messageId`
+### `GET /api/v1/chats/:chatId/messages/:messageId`
 
-Edit a message. Only the original sender can edit. A `message:updated` event is broadcast.
+Fetch a single message. The requesting user must be a chat participant.
 
-**Request body** — `{ "content": "Updated text" }`
-
----
-
-### DELETE `/api/v1/chats/:chatId/messages/:messageId`
-
-Delete a message. Only the original sender can delete. A `message:deleted` event is broadcast.
+**Errors** — `403` not a participant · `404` message or chat not found
 
 ---
 
-## Health Check
+### `PATCH /api/v1/chats/:chatId/messages/:messageId`
 
-### GET `/health`
+Edit a message. **Sender only.** A `message:updated` Socket.io event is broadcast to the chat room.
 
-Check application and database connectivity. No authentication required.
-
-**Response `200`** when all healthy, `503` when any check fails.
+**Request body** `application/json`
 
 ```json
-{
-  "uptime": 123.4,
-  "timestamp": 1705838400000,
-  "status": "OK",
-  "environment": "development",
-  "version": "1.0.0",
-  "checks": {
-    "mongodb": "connected",
-    "postgresql": "connected",
-    "redis": "connected"
-  }
-}
+{ "content": "Edited content here" }
 ```
+
+**Errors** — `403` not the original sender (`NOT_MESSAGE_OWNER`) · `404` message not found
 
 ---
 
-## Error Codes
+### `DELETE /api/v1/chats/:chatId/messages/:messageId`
 
-| Code                      | HTTP Status | Description                                  |
-| ------------------------- | ----------- | -------------------------------------------- |
-| `VALIDATION_FAILED`       | 400         | Joi schema validation failed                 |
-| `BAD_REQUEST`             | 400         | General bad request                          |
-| `MISSING_TOKEN`           | 401         | Authorization header absent                  |
-| `INVALID_TOKEN`           | 401         | Token malformed or wrong signature           |
-| `TOKEN_EXPIRED`           | 401         | Access token has expired                     |
-| `INVALID_CREDENTIALS`     | 401         | Wrong username/email or password             |
-| `INVALID_PASSWORD`        | 401         | Incorrect current password                   |
-| `SESSION_NOT_FOUND`       | 401         | Refresh token not in Redis                   |
-| `REFRESH_TOKEN_REVOKED`   | 401         | Refresh token deleted or expired             |
-| `FORBIDDEN`               | 403         | Action not permitted                         |
-| `NOT_A_MEMBER`            | 403         | User is not a chat participant               |
-| `ADMIN_REQUIRED`          | 403         | Only group admin may perform this action     |
-| `NOT_MESSAGE_OWNER`       | 403         | Only message sender may edit/delete          |
-| `NOT_FOUND`               | 404         | Resource does not exist                      |
-| `EMAIL_ALREADY_EXISTS`    | 409         | Duplicate email                              |
-| `USERNAME_ALREADY_TAKEN`  | 409         | Duplicate username                           |
-| `ALREADY_MEMBER`          | 409         | User is already in the group                 |
-| `ADMIN_TRANSFER_REQUIRED` | 409         | Admin must transfer ownership before leaving |
-| `UNSUPPORTED_FILE_TYPE`   | 415         | Avatar file type not allowed                 |
-| `PAYLOAD_TOO_LARGE`       | 413         | File exceeds size limit                      |
-| `INTERNAL_SERVER_ERROR`   | 500         | Unexpected server error                      |
+Delete a message. **Sender only.** A `message:deleted` Socket.io event is broadcast to the chat room.
+
+**Errors** — `403` not the original sender (`NOT_MESSAGE_OWNER`) · `404` message not found
+
+---
+
+## Error Code Reference
+
+| Code                      | HTTP | Description                                   |
+| ------------------------- | ---- | --------------------------------------------- |
+| `VALIDATION_FAILED`       | 400  | Joi schema validation failed                  |
+| `BAD_REQUEST`             | 400  | General bad request                           |
+| `MISSING_TOKEN`           | 401  | Authorization header or refresh_token absent  |
+| `INVALID_TOKEN`           | 401  | Token malformed or signature invalid          |
+| `TOKEN_EXPIRED`           | 401  | Access token has expired                      |
+| `TOKEN_NOT_ACTIVE`        | 401  | Token `nbf` not yet reached                   |
+| `INVALID_CREDENTIALS`     | 401  | Wrong username/email or password              |
+| `INVALID_PASSWORD`        | 401  | Incorrect current password on password change |
+| `SESSION_NOT_FOUND`       | 401  | Refresh token not found in Redis (logout)     |
+| `REFRESH_TOKEN_REVOKED`   | 401  | Refresh token deleted or expired (refresh)    |
+| `FORBIDDEN`               | 403  | Action not permitted                          |
+| `NOT_A_MEMBER`            | 403  | User is not a chat participant                |
+| `ADMIN_REQUIRED`          | 403  | Only the group admin may perform this action  |
+| `NOT_MESSAGE_OWNER`       | 403  | Only the original sender may edit/delete      |
+| `NOT_FOUND`               | 404  | Resource does not exist                       |
+| `EMAIL_ALREADY_EXISTS`    | 409  | Duplicate email on signup                     |
+| `USERNAME_ALREADY_TAKEN`  | 409  | Duplicate username on signup or update        |
+| `ALREADY_MEMBER`          | 409  | User is already in the group                  |
+| `ADMIN_TRANSFER_REQUIRED` | 409  | Admin must transfer ownership before leaving  |
+| `PAYLOAD_TOO_LARGE`       | 413  | File exceeds the configured size limit        |
+| `UNSUPPORTED_FILE_TYPE`   | 415  | Avatar MIME type not allowed                  |
+| `TOO_MANY_REQUESTS`       | 429  | Rate limit exceeded                           |
+| `INTERNAL_SERVER_ERROR`   | 500  | Unexpected server error                       |

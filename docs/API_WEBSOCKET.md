@@ -1,61 +1,93 @@
 # WebSocket API Reference
 
-Real-time communication using Socket.io for the fastchat application.
+Real-time features for fastchat are built on [Socket.io 4.x](https://socket.io/).
+
+---
+
+## Overview
+
+The WebSocket layer handles everything that needs to happen in real-time:
+
+- **Message delivery** — new, updated, and deleted messages broadcast to chat rooms
+- **Delivery & read receipts** — clients report when a message was rendered or read
+- **Typing indicators** — start/stop typing signals forwarded to room participants
+- **Online presence** — first-connect / last-disconnect broadcasts across the app
+
+**Messages are sent via the REST API** (`POST /api/v1/chats/:chatId/messages`), not directly over the socket. The server persists the message then emits `message:new` to the room.
+
+---
 
 ## Connection
 
-### Establishing a Connection
+Authenticate by passing your JWT access token in the `auth` object during the handshake. The server verifies the token before the connection is accepted.
 
-Pass your JWT access token in the `auth` object during handshake:
-
-```javascript
-import io from 'socket.io-client'
+```js
+import { io } from 'socket.io-client'
 
 const socket = io('http://localhost:3000', {
-  auth: { token: '<accessToken>' },
+  auth: { token: accessToken },
 })
 ```
 
-The server verifies the token before the connection is accepted. If verification fails, `connect_error` is fired and the socket is rejected.
+If verification fails the socket is rejected and `connect_error` fires on the client:
 
-### Connection Events
-
-```javascript
-socket.on('connect', () => {
-  console.log('Connected, socket ID:', socket.id)
-})
-
-socket.on('disconnect', (reason) => {
-  // 'io server disconnect' | 'io client disconnect' |
-  // 'ping timeout' | 'transport close' | 'transport error'
-  console.log('Disconnected:', reason)
-})
-
+```js
 socket.on('connect_error', (error) => {
-  console.error('Connection error:', error.message)
-  // e.g. 'Authorization token missing'
+  // error.message: 'Authorization token missing' | 'Invalid or expired token'
+  console.error('Connection rejected:', error.message)
+})
+```
+
+### Reconnection
+
+Socket.io reconnects automatically on network interruptions. Re-join any active chat rooms on reconnect, because room membership is not persisted across connections:
+
+```js
+socket.on('connect', () => {
+  activeChats.forEach((chatId) => socket.emit('chat:join', { chatId }))
 })
 ```
 
 ---
 
+## Event Reference
+
+### Client → Server
+
+| Event                  | Payload                 | Description                                                                    |
+| ---------------------- | ----------------------- | ------------------------------------------------------------------------------ |
+| `chat:join`            | `{ chatId: string }`    | Subscribe to a chat room to receive message and typing events                  |
+| `chat:leave`           | `{ chatId: string }`    | Unsubscribe from a chat room                                                   |
+| `message:delivered`    | `{ messageId: string }` | Report that a message was rendered; updates status to `'delivered'` in MongoDB |
+| `message:read`         | `{ messageId: string }` | Report that the user read a message; updates status to `'read'` in MongoDB     |
+| `message:start-typing` | `{ chatId: string }`    | Signal that the current user started typing                                    |
+| `message:stop-typing`  | `{ chatId: string }`    | Signal that the current user stopped typing                                    |
+
+### Server → Client
+
+| Event                  | Payload                              | Trigger                                    |
+| ---------------------- | ------------------------------------ | ------------------------------------------ |
+| `user:online`          | `{ userId: string }`                 | A user's first socket connected            |
+| `user:offline`         | `{ userId: string }`                 | A user's last socket disconnected          |
+| `message:new`          | full message object                  | Message created via `POST /messages`       |
+| `message:updated`      | full message object                  | Message edited via `PATCH /messages/:id`   |
+| `message:deleted`      | `{ messageId: string }`              | Message deleted via `DELETE /messages/:id` |
+| `message:start-typing` | `{ userId: string, chatId: string }` | Forwarded to room (not back to sender)     |
+| `message:stop-typing`  | `{ userId: string, chatId: string }` | Forwarded to room (not back to sender)     |
+
+---
+
 ## Online Presence
 
-When a user's **first** socket connects, the server broadcasts `user:online` to all other connected sockets. When their **last** socket disconnects, `user:offline` is broadcast. Multiple browser tabs or devices are handled transparently — only the first/last connection triggers the broadcast.
+When a user's **first** socket connects, `user:online` is broadcast to all other connected clients. When their **last** socket disconnects, `user:offline` is broadcast. Multiple tabs and devices are handled transparently — only the true first/last connection triggers the event.
 
-### `user:online` (server → client)
-
-```javascript
+```js
 socket.on('user:online', ({ userId }) => {
-  // Mark userId as online in your UI
+  updatePresenceUI(userId, 'online')
 })
-```
 
-### `user:offline` (server → client)
-
-```javascript
 socket.on('user:offline', ({ userId }) => {
-  // Mark userId as offline / show last-seen
+  updatePresenceUI(userId, 'offline')
 })
 ```
 
@@ -63,43 +95,34 @@ socket.on('user:offline', ({ userId }) => {
 
 ## Chat Room Events
 
-Join a chat room to receive its real-time message and typing events.
+Join a room when the user opens a chat view. Leave when they navigate away.
 
-### `chat:join` (client → server)
+```js
+// Opening a chat
+socket.emit('chat:join', { chatId })
 
-```javascript
-socket.emit('chat:join', { chatId: '<chatId>' })
+// Closing a chat (good practice — reduces server memory)
+socket.emit('chat:leave', { chatId })
 ```
 
-Emit when the user opens a chat view. Only participants may join (validated by the Socket.io auth middleware via the access token).
-
-### `chat:leave` (client → server)
-
-```javascript
-socket.emit('chat:leave', { chatId: '<chatId>' })
-```
-
-Emit when the user navigates away from a chat. Good practice to reduce server memory usage.
+Only participants in the chat may join its room. Non-participants who attempt to join will have the event ignored.
 
 ---
 
 ## Message Events
 
-### Sending messages
+### Receiving new messages
 
-Messages are sent via the **REST API** (`POST /api/v1/chats/:chatId/messages`), not directly over the socket. The server emits `message:new` to the chat room after persisting the message.
-
-### `message:new` (server → client)
-
-```javascript
+```js
 socket.on('message:new', (message) => {
-  // Render the message in the UI
-  // Then emit message:delivered so the sender knows it arrived
+  renderMessage(message)
+
+  // Immediately report delivery so the sender's status updates
   socket.emit('message:delivered', { messageId: message.id })
 })
 ```
 
-**Payload**
+**Message payload shape:**
 
 ```json
 {
@@ -114,107 +137,68 @@ socket.on('message:new', (message) => {
 }
 ```
 
-### `message:updated` (server → client)
+### Edits and deletions
 
-Emitted after a successful `PATCH /messages/:id` REST call.
-
-```javascript
+```js
 socket.on('message:updated', (message) => {
-  // Replace the existing message in the UI with the updated one
+  replaceMessageInUI(message.id, message)
 })
-```
 
-### `message:deleted` (server → client)
-
-Emitted after a successful `DELETE /messages/:id` REST call.
-
-```javascript
 socket.on('message:deleted', ({ messageId }) => {
-  // Remove the message from the UI
+  removeMessageFromUI(messageId)
 })
 ```
 
-### `message:delivered` (client → server)
+### Marking messages as read
 
-Tell the server that the message was rendered on the client.
+Emit `message:read` when a message scrolls into the viewport and the window has focus:
 
-```javascript
-socket.emit('message:delivered', { messageId: '<messageId>' })
-```
-
-### `message:read` (client → server)
-
-Tell the server that the user actually read the message (e.g. it scrolled into the viewport).
-
-```javascript
-// Example using Intersection Observer
+```js
 const observer = new IntersectionObserver((entries) => {
-  entries.forEach((entry) => {
+  for (const entry of entries) {
     if (entry.isIntersecting && document.hasFocus()) {
       socket.emit('message:read', {
         messageId: entry.target.dataset.messageId,
       })
     }
-  })
+  }
 })
 ```
 
 ---
 
-## Typing Events
+## Typing Indicators
 
-### `message:start-typing` (client → server)
+Debounce the `message:start-typing` event to avoid flooding the server. Emit `message:stop-typing` when the input clears, a message is sent, or a 3-second inactivity timeout fires.
 
-Notify other participants that the current user is typing.
+```js
+let typingTimer
 
-```javascript
-socket.emit('message:start-typing', { chatId: '<chatId>' })
-```
+function onInputChange(chatId, value) {
+  clearTimeout(typingTimer)
 
-**Best practice — debounce to avoid flooding:**
-
-```javascript
-let typingTimeout
-
-function onInput(chatId, value) {
-  if (!value.length) {
-    clearTimeout(typingTimeout)
+  if (!value) {
     socket.emit('message:stop-typing', { chatId })
     return
   }
 
-  clearTimeout(typingTimeout)
   socket.emit('message:start-typing', { chatId })
 
-  typingTimeout = setTimeout(() => {
+  typingTimer = setTimeout(() => {
     socket.emit('message:stop-typing', { chatId })
   }, 3000)
 }
 ```
 
-### `message:stop-typing` (client → server)
+Receive typing events from other participants (the server never echoes events back to the sender):
 
-```javascript
-socket.emit('message:stop-typing', { chatId: '<chatId>' })
-```
-
-Emit when the user clears the input, sends a message, or the 3-second inactivity timeout fires.
-
-### `message:start-typing` (server → client)
-
-Broadcast to all other users currently in the chat room.
-
-```javascript
+```js
 socket.on('message:start-typing', ({ userId, chatId }) => {
-  // Show "User is typing…" indicator
+  showTypingIndicator(userId, chatId)
 })
-```
 
-### `message:stop-typing` (server → client)
-
-```javascript
 socket.on('message:stop-typing', ({ userId, chatId }) => {
-  // Hide typing indicator for this user
+  hideTypingIndicator(userId, chatId)
 })
 ```
 
@@ -222,40 +206,53 @@ socket.on('message:stop-typing', ({ userId, chatId }) => {
 
 ## Complete Client Example
 
-```javascript
-import io from 'socket.io-client'
+A minimal but complete Socket.io client class covering all events:
 
-class ChatClient {
-  constructor(accessToken) {
-    this.socket = io('http://localhost:3000', {
-      auth: { token: accessToken },
-    })
+```js
+import { io } from 'socket.io-client'
+
+class FastChatClient {
+  constructor(accessToken, baseUrl = 'http://localhost:3000') {
+    this.socket = io(baseUrl, { auth: { token: accessToken } })
     this.activeChats = new Set()
-    this._setup()
+    this._bindEvents()
   }
 
-  _setup() {
+  _bindEvents() {
     const { socket } = this
 
+    // Re-join rooms after reconnect
     socket.on('connect', () => {
-      // Re-join active chats after reconnect
       this.activeChats.forEach((chatId) => socket.emit('chat:join', { chatId }))
     })
 
+    socket.on('connect_error', (err) => {
+      console.error('Socket connection error:', err.message)
+    })
+
+    // Messages
     socket.on('message:new', (msg) => {
-      this.renderMessage(msg)
+      this.onNewMessage(msg)
       socket.emit('message:delivered', { messageId: msg.id })
     })
 
-    socket.on('message:updated', (msg) => this.updateMessage(msg))
-    socket.on('message:deleted', ({ messageId }) => this.removeMessage(messageId))
+    socket.on('message:updated', (msg) => this.onMessageUpdated(msg))
+    socket.on('message:deleted', ({ messageId }) => this.onMessageDeleted(messageId))
 
-    socket.on('message:start-typing', ({ userId }) => this.showTyping(userId))
-    socket.on('message:stop-typing', ({ userId }) => this.hideTyping(userId))
+    // Typing
+    socket.on('message:start-typing', ({ userId, chatId }) => {
+      this.onTypingStart(userId, chatId)
+    })
+    socket.on('message:stop-typing', ({ userId, chatId }) => {
+      this.onTypingStop(userId, chatId)
+    })
 
-    socket.on('user:online', ({ userId }) => this.setStatus(userId, 'online'))
-    socket.on('user:offline', ({ userId }) => this.setStatus(userId, 'offline'))
+    // Presence
+    socket.on('user:online', ({ userId }) => this.onUserOnline(userId))
+    socket.on('user:offline', ({ userId }) => this.onUserOffline(userId))
   }
+
+  // ── Room management ──────────────────────────────────────────
 
   openChat(chatId) {
     this.activeChats.add(chatId)
@@ -267,58 +264,48 @@ class ChatClient {
     this.socket.emit('chat:leave', { chatId })
   }
 
+  // ── Receipts ─────────────────────────────────────────────────
+
   markRead(messageId) {
     this.socket.emit('message:read', { messageId })
   }
 
-  // Implement UI methods:
-  renderMessage(msg) {
-    /* … */
+  // ── Typing ───────────────────────────────────────────────────
+
+  startTyping(chatId) {
+    this.socket.emit('message:start-typing', { chatId })
   }
-  updateMessage(msg) {
-    /* … */
+
+  stopTyping(chatId) {
+    this.socket.emit('message:stop-typing', { chatId })
   }
-  removeMessage(id) {
-    /* … */
+
+  // ── Implement these in your UI layer ─────────────────────────
+
+  onNewMessage(message) {
+    /* render message */
   }
-  showTyping(userId) {
-    /* … */
+  onMessageUpdated(message) {
+    /* replace existing message */
   }
-  hideTyping(userId) {
-    /* … */
+  onMessageDeleted(messageId) {
+    /* remove from UI */
   }
-  setStatus(userId, status) {
-    /* … */
+  onTypingStart(userId, chatId) {
+    /* show typing indicator */
+  }
+  onTypingStop(userId, chatId) {
+    /* hide typing indicator */
+  }
+  onUserOnline(userId) {
+    /* update presence indicator */
+  }
+  onUserOffline(userId) {
+    /* update presence indicator */
   }
 }
 
-const client = new ChatClient(accessToken)
+// Usage
+const client = new FastChatClient(accessToken)
 client.openChat('<chatId>')
 ```
-
----
-
-## Event Summary
-
-### Client → Server
-
-| Event                  | Payload         | Description                  |
-| ---------------------- | --------------- | ---------------------------- |
-| `chat:join`            | `{ chatId }`    | Subscribe to a chat room     |
-| `chat:leave`           | `{ chatId }`    | Unsubscribe from a chat room |
-| `message:delivered`    | `{ messageId }` | Confirm message was rendered |
-| `message:read`         | `{ messageId }` | Confirm message was read     |
-| `message:start-typing` | `{ chatId }`    | User started typing          |
-| `message:stop-typing`  | `{ chatId }`    | User stopped typing          |
-
-### Server → Client
-
-| Event                  | Payload              | Description                  |
-| ---------------------- | -------------------- | ---------------------------- |
-| `message:new`          | full message object  | New message in a joined room |
-| `message:updated`      | full message object  | Message was edited           |
-| `message:deleted`      | `{ messageId }`      | Message was deleted          |
-| `message:start-typing` | `{ userId, chatId }` | Another user started typing  |
-| `message:stop-typing`  | `{ userId, chatId }` | Another user stopped typing  |
-| `user:online`          | `{ userId }`         | User came online             |
-| `user:offline`         | `{ userId }`         | User went offline            |

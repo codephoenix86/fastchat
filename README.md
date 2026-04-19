@@ -1,110 +1,108 @@
-# fastchat — Real-Time Chat Application
+# fastchat
 
 [![Node.js](https://img.shields.io/badge/node-%3E%3D18.0.0-brightgreen)](https://nodejs.org/)
+[![Express](https://img.shields.io/badge/express-5.x-lightgrey)](https://expressjs.com/)
 [![MongoDB](https://img.shields.io/badge/mongodb-%3E%3D6.0-green)](https://www.mongodb.com/)
 [![PostgreSQL](https://img.shields.io/badge/postgresql-%3E%3D16-blue)](https://www.postgresql.org/)
 [![Redis](https://img.shields.io/badge/redis-%3E%3D7.2-red)](https://redis.io/)
+[![Socket.io](https://img.shields.io/badge/socket.io-4.x-black)](https://socket.io/)
 [![License: ISC](https://img.shields.io/badge/License-ISC-blue.svg)](https://opensource.org/licenses/ISC)
 
-A production-ready real-time chat application built with Node.js, Express, MongoDB, PostgreSQL, Redis, and Socket.io — following REST best practices and clean architecture principles.
+A production-ready real-time chat API built with Node.js, Express 5, Socket.io, PostgreSQL, MongoDB, and Redis. Implements clean layered architecture with JWT authentication, token rotation, online presence tracking, delivery receipts, and optional AWS S3 avatar storage.
 
-## Live Demo
+**Live API:** `https://fastchat.duckdns.org` — verify with `GET /health`
 
-The API is deployed on AWS EC2 with HTTPS, Nginx reverse proxy, and Docker.
-
-**Base URL:** https://fastchat.duckdns.org
-
-> **Note:** This URL may not always be live. Check the health endpoint to verify: `GET https://fastchat.duckdns.org/health`
-
-**Deployment write-up:** [How I Deployed My First Production App on AWS EC2 — Every Mistake I Made](https://dev.to/codephoenix86/how-i-deployed-my-first-production-app-on-aws-ec2-every-mistake-i-made-4e8e)
+---
 
 ## Features
 
-- 🔐 **JWT Authentication** — Short-lived access tokens with opaque refresh tokens stored in Redis
-- 👥 **User Management** — PostgreSQL-backed users and profiles with full CRUD support
-- 💬 **Real-Time Messaging** — Instant messaging with delivery/read receipts via Socket.io
-- 🔔 **Typing Indicators** — Real-time typing status broadcasts
-- 👤 **Avatar Support** — Profile pictures stored in AWS S3 via multipart file upload
-- 🔍 **Advanced Queries** — Pagination, search, filtering, and sorting on all list endpoints
-- 📊 **Online Presence** — Redis-backed user presence tracking with last-seen timestamps
-- 🔒 **Security** — Helmet, CORS, XSS sanitization, input validation, and rate limiting
-- 📝 **Structured Logging** — Winston with daily log rotation
-- ✅ **Full Test Coverage** — Unit and integration tests with 70%+ coverage threshold
+| Capability                   | Details                                                                                       |
+| ---------------------------- | --------------------------------------------------------------------------------------------- |
+| **Authentication**           | JWT access tokens (15 min) + opaque refresh tokens (7 days) in Redis with full rotation       |
+| **User management**          | PostgreSQL-backed users and profiles — CRUD, password change, account deletion                |
+| **Avatar storage**           | Upload/delete to AWS S3 via multipart form-data (optional, gated by `S3_ENABLED`)             |
+| **Private & group chats**    | Create, update, delete chats; full member management with admin roles                         |
+| **Real-time messaging**      | Send via REST, receive via Socket.io with `message:new` broadcast                             |
+| **Delivery & read receipts** | `message:delivered` / `message:read` socket events update MongoDB status                      |
+| **Typing indicators**        | `message:start-typing` / `message:stop-typing` broadcast to room participants                 |
+| **Online presence**          | Redis Set per user; first-connect / last-disconnect broadcasts `user:online` / `user:offline` |
+| **Pagination**               | All list endpoints support `?page`, `limit`, `sort`, `search`, `role`, `type`                 |
+| **Security**                 | Helmet, CORS, XSS sanitization, Joi validation, Redis-backed rate limiting                    |
+| **Logging**                  | Winston with daily log rotation; structured JSON in production                                |
+
+---
 
 ## Quick Start
 
 ```bash
-# Install dependencies
+git clone https://github.com/codephoenix86/fastchat.git
+cd fastchat
 npm install
 
-# Configure environment
-cp .env.example .env
-# Edit .env with your database URIs, secrets, and AWS credentials
+cp .env.example .env   # Fill in DB URIs and secrets
 
-# Run PostgreSQL migrations
-npm run migrate:up
+npm run migrate:up     # Apply PostgreSQL schema migrations
 
-# Start development server
-npm run dev
-
-# Run tests
-npm test
+npm run dev            # Start development server (auto-reload)
 ```
 
-## Documentation
+Then verify all databases are reachable:
 
-- **[Quick Start Guide](docs/QUICKSTART.md)** — Get up and running in 5 minutes
-- **[REST API Reference](docs/API_REST.md)** — Complete HTTP endpoint documentation
-- **[WebSocket API](docs/API_WEBSOCKET.md)** — Socket.io events and real-time features
-- **[Architecture Overview](docs/ARCHITECTURE.md)** — System design, layers, and where validation runs
-- **[Testing Guide](docs/TESTING.md)** — Testing strategy and best practices
+```bash
+curl http://localhost:3000/health
+```
+
+Full setup walkthrough → **[Quick Start Guide](docs/QUICKSTART.md)**
+
+---
 
 ## Tech Stack
 
-| Layer               | Technology                             |
-| ------------------- | -------------------------------------- |
-| Runtime             | Node.js 18+, Express 5.x               |
-| Users / Auth        | PostgreSQL 16+ (via `pg`)              |
-| Chats / Messages    | MongoDB 6.0+ (via Mongoose)            |
-| Sessions / Presence | Redis 7.2+ (via ioredis)               |
-| Real-time           | Socket.io 4.x                          |
-| Authentication      | JWT (access) + opaque tokens (refresh) |
-| File Storage        | AWS S3 (via `@aws-sdk/client-s3`)      |
-| Validation          | Joi schemas                            |
-| Testing             | Jest, Supertest                        |
-| Logging             | Winston + daily-rotate-file            |
+| Layer               | Technology                              |
+| ------------------- | --------------------------------------- |
+| Runtime / Framework | Node.js ≥ 18, Express 5.x               |
+| Users & Auth        | PostgreSQL 16+ via `pg` (node-postgres) |
+| Chats & Messages    | MongoDB 6.0+ via Mongoose               |
+| Sessions & Presence | Redis 7.2+ via ioredis                  |
+| Real-time           | Socket.io 4.x                           |
+| File Storage        | AWS S3 via `@aws-sdk/client-s3`         |
+| Validation          | Joi                                     |
+| Logging             | Winston + `winston-daily-rotate-file`   |
+| Testing             | Jest 30 + Supertest 7                   |
 
-## Infrastructure
+---
 
-| Component      | Technology                         |
-| -------------- | ---------------------------------- |
-| Server         | AWS EC2 (t3.micro, Ubuntu)         |
-| Reverse Proxy  | Nginx (Docker container)           |
-| SSL            | Let's Encrypt via Certbot          |
-| Domain         | DuckDNS (fastchat.duckdns.org)     |
-| Containers     | Docker + Docker Compose            |
-| Image Registry | DockerHub (nareshlohar86/fastchat) |
+## Project Structure
 
-## Environment Configuration
+```
+fastchat/
+├── server.js               # Entry point — DB init, HTTP + Socket.io server
+├── src/
+│   ├── app.js              # Express app factory — middleware stack, route mounting
+│   ├── config/             # DB clients (mongo, postgres, redis, s3), logger, env
+│   ├── constants/          # Shared enums: CHAT_TYPES, MESSAGE_STATUS, SOCKET_EVENTS
+│   ├── controllers/        # Thin handlers: validate → service → ApiResponse
+│   ├── errors/             # Custom error class hierarchy (AppError subclasses)
+│   ├── middlewares/        # Auth, validation, upload, sanitization, rate limiting
+│   ├── models/             # Mongoose schemas: Chat, Message
+│   ├── repositories/       # Data-access layer — one class per DB concern
+│   ├── routes/             # Express router definitions (no business logic)
+│   ├── schemas/            # Joi validation schemas (per domain)
+│   ├── services/           # All business logic
+│   ├── sockets/            # Socket.io init, auth middleware, event handlers
+│   └── utils/              # asyncHandler, ApiResponse, pagination helpers
+├── migrations/             # node-pg-migrate PostgreSQL migrations
+├── tests/
+│   ├── integration/        # Supertest API tests against real databases
+│   ├── unit/               # Isolated tests with mocked dependencies
+│   ├── helpers/            # DB lifecycle and assertion helpers
+│   ├── factories/          # Test data factories
+│   └── setup.js            # Global mocks: logger, Socket.io, S3
+├── docs/                   # Documentation
+└── logs/                   # Rotated log files (created at runtime)
+```
 
-| Variable                | Description                                | Default                 |
-| ----------------------- | ------------------------------------------ | ----------------------- |
-| `NODE_ENV`              | Environment mode                           | `development`           |
-| `PORT`                  | Server port                                | `3000`                  |
-| `MONGODB_URI`           | MongoDB connection string                  | Required                |
-| `POSTGRES_URI`          | PostgreSQL connection string               | Required                |
-| `REDIS_URI`             | Redis connection string                    | Required                |
-| `ACCESS_TOKEN_SECRET`   | Access token signing secret (min 32 chars) | Required                |
-| `ACCESS_TOKEN_TTL`      | Access token lifetime                      | `15m`                   |
-| `REFRESH_TOKEN_TTL`     | Refresh token Redis key TTL                | `7d`                    |
-| `ALLOWED_ORIGINS`       | Comma-separated CORS origins               | `http://localhost:3000` |
-| `MAX_FILE_SIZE`         | Avatar upload limit in bytes               | `5242880`               |
-| `AWS_REGION`            | AWS region for S3                          | Required                |
-| `AWS_ACCESS_KEY_ID`     | AWS IAM access key ID                      | Required                |
-| `AWS_SECRET_ACCESS_KEY` | AWS IAM secret access key                  | Required                |
-| `S3_BUCKET_NAME`        | S3 bucket name for avatar storage          | Required                |
-
-See [.env.example](.env.example) for the full template.
+---
 
 ## API Overview
 
@@ -117,7 +115,7 @@ POST /api/v1/auth/logout
 POST /api/v1/auth/refresh
 
 GET    /api/v1/users
-GET    /api/v1/users/:id
+GET    /api/v1/users/:userId
 GET    /api/v1/users/me
 PATCH  /api/v1/users/me
 DELETE /api/v1/users/me
@@ -142,59 +140,62 @@ PATCH  /api/v1/chats/:chatId/messages/:messageId
 DELETE /api/v1/chats/:chatId/messages/:messageId
 ```
 
-See [REST API Reference](docs/API_REST.md) for full documentation.
+Full reference → **[REST API Reference](docs/API_REST.md)**
+
+---
 
 ## Scripts
 
 ```bash
-npm start                        # Production server
-npm run dev                      # Development with nodemon
-npm test                         # All tests with coverage (serial; avoids DB deadlocks)
-npm run test:parallel            # Same as npm test but parallel workers (faster; can flake on integration)
-npm run test:watch               # Watch mode
-npm run test:unit                # Unit tests only
-npm run test:integration         # Integration tests only (serial)
-npm run test:sequential          # Same as npm test (serial full suite)
-npm run migrate:up               # Apply PostgreSQL migrations
-npm run migrate:down             # Roll back last migration
-npm run migrate:create -- <name> # Create a new migration file
-npm run lint                     # Lint source files
-npm run format                   # Format with Prettier
+npm start                         # Production server
+npm run dev                       # Development with nodemon (auto-reload)
+
+npm test                          # Full suite with coverage (serial — reliable)
+npm run test:parallel             # Full suite (parallel workers — faster, may flake on integration)
+npm run test:unit                 # Unit tests only
+npm run test:integration          # Integration tests only (serial)
+npm run test:watch                # Watch mode
+npm run test:debug                # Attach Node inspector
+
+npm run migrate:up                # Apply pending PostgreSQL migrations
+npm run migrate:down              # Roll back the last migration
+npm run migrate:create -- <name>  # Create a new migration file
+
+npm run lint                      # Lint all source files
+npm run lint:fix                  # Lint and auto-fix
+npm run format                    # Format with Prettier
+npm run format:check              # Check formatting without writing
 ```
 
-## Project Structure
+---
 
-```
-fastchat/
-├── src/
-│   ├── config/          # DB connections (mongo, postgres, redis, s3), logger, env
-│   ├── constants/       # Shared enums and validation constants
-│   ├── controllers/     # Express route handlers
-│   ├── errors/          # Custom error classes
-│   ├── middlewares/     # Auth, validation, upload, sanitization, rate-limit
-│   ├── models/          # Mongoose schemas (Chat, Message)
-│   ├── repositories/    # Data-access layer (mongo + postgres + redis)
-│   ├── routes/          # Express router definitions
-│   ├── schemas/         # Joi validation schemas
-│   ├── services/        # Business logic
-│   ├── sockets/         # Socket.io server, handlers, middleware
-│   ├── utils/           # asyncHandler, JWT helpers, pagination, ApiResponse
-│   └── app.js           # Express app setup
-├── migrations/          # node-pg-migrate PostgreSQL migrations
-├── tests/
-│   ├── integration/     # Supertest API tests
-│   ├── unit/            # Isolated service / middleware tests
-│   ├── helpers/         # DB connect/clear/disconnect helpers
-│   └── setup.js         # Jest global setup
-├── logs/                # Rotated application logs
-├── docs/                # Documentation
-└── server.js            # Entry point
-```
+## Documentation
+
+| Document                                         | Description                                         |
+| ------------------------------------------------ | --------------------------------------------------- |
+| [Quick Start Guide](docs/QUICKSTART.md)          | Local setup from clone to running server            |
+| [Architecture Overview](docs/ARCHITECTURE.md)    | System design, data flow, DB schemas, patterns      |
+| [REST API Reference](docs/API_REST.md)           | All HTTP endpoints with request/response shapes     |
+| [WebSocket API Reference](docs/API_WEBSOCKET.md) | Socket.io events, presence, and client example      |
+| [Testing Guide](docs/TESTING.md)                 | Test strategy, environment setup, helpers, patterns |
+
+---
+
+## Infrastructure
+
+The live deployment runs on AWS EC2 with:
+
+| Component      | Technology                            |
+| -------------- | ------------------------------------- |
+| Server         | AWS EC2 (t3.micro, Ubuntu)            |
+| Reverse proxy  | Nginx (Docker container)              |
+| TLS            | Let's Encrypt via Certbot             |
+| Domain         | DuckDNS (`fastchat.duckdns.org`)      |
+| Containers     | Docker + Docker Compose               |
+| Image registry | Docker Hub (`nareshlohar86/fastchat`) |
+
+---
 
 ## License
 
-ISC
-
-## Author
-
-Naresh Lohar — [GitHub](https://github.com/codephoenix86/fastchat) · [LinkedIn](https://www.linkedin.com/in/nareshlohar86/)
+ISC — [Naresh Lohar](https://github.com/codephoenix86/fastchat)

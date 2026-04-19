@@ -1,21 +1,21 @@
 # Testing Guide
 
-Testing strategy, tooling, structure, and best practices for fastchat.
+Testing strategy, environment setup, helpers, and patterns for fastchat.
 
 ---
 
-## Testing Stack
+## Stack
 
-| Tool                | Role                                                                  |
-| ------------------- | --------------------------------------------------------------------- |
-| **Jest**            | Test runner, assertions, mocking                                      |
-| **Supertest**       | HTTP integration testing against the Express app                      |
-| **Real MongoDB**    | Integration tests hit a real localhost MongoDB instance               |
-| **Real PostgreSQL** | Integration tests hit a real PG instance (configured via `.env.test`) |
-| **Real Redis**      | Integration tests hit a real Redis instance (flushed between tests)   |
-| **Mocked S3**       | `@services/s3.service` is mocked globally — no real AWS calls         |
+| Tool                | Role                                                     |
+| ------------------- | -------------------------------------------------------- |
+| **Jest 30**         | Test runner, assertions, mocking                         |
+| **Supertest 7**     | HTTP integration tests against the Express app           |
+| **Real MongoDB**    | Integration tests hit a real localhost instance          |
+| **Real PostgreSQL** | Integration tests hit a real PG instance                 |
+| **Real Redis**      | Integration tests hit a real Redis instance              |
+| **Mocked S3**       | `@services/s3.service` is mocked globally — no AWS calls |
 
-> Integration tests require all three databases running locally. Use dedicated test database names (e.g. `fastchat_test`) so tests never affect development data. AWS credentials are **not** required for testing — S3 is fully mocked.
+Integration tests require all three databases running. AWS credentials are never needed — S3 is fully mocked.
 
 ---
 
@@ -23,70 +23,76 @@ Testing strategy, tooling, structure, and best practices for fastchat.
 
 ```
 tests/
-├── integration/          # Full API tests via Supertest
+├── integration/               # Full API tests via Supertest
 │   ├── auth.test.js
-│   ├── chats.test.js
-│   ├── messages.test.js
+│   ├── auth.edge.test.js
 │   ├── users.test.js
-│   ├── errors.test.js
+│   ├── users.edge.test.js
+│   ├── chats.test.js
+│   ├── chats.edge.test.js
+│   ├── messages.test.js
+│   ├── messages.edge.test.js
 │   ├── health.test.js
-│   └── helpers.js        # createTestUser, createTestChat, expectError, …
-├── unit/                 # Isolated tests with mocked dependencies
-│   ├── middlewares/
-│   │   ├── authentication.middleware.test.js
-│   │   └── senitization.middleware.test.js
+│   ├── errors.test.js
+│   ├── flows.test.js
+│   ├── pagination.test.js
+│   └── security.test.js
+├── unit/                      # Isolated tests with mocked dependencies
 │   ├── services/
 │   │   ├── auth.service.test.js
 │   │   ├── chat.service.test.js
 │   │   ├── user.service.test.js
+│   │   ├── message.service.test.js
 │   │   └── s3.service.test.js
+│   ├── middlewares/
+│   │   ├── authentication.middleware.test.js
+│   │   └── sanitization.middleware.test.js
+│   ├── repositories/
+│   ├── sockets/
 │   ├── utils/
-│   │   ├── asyncHandler.test.js
-│   │   ├── errors.test.js
-│   │   ├── jwt.test.js
-│   │   ├── pagination.test.js
-│   │   └── response.test.js
-│   └── helpers.js        # createMockUser, mockRequest, mockResponse, …
+│   ├── schemas/
+│   ├── config/
+│   └── models/
 ├── helpers/
-│   ├── db.helpers.js     # connectTestDB / clearTestDB / disconnectTestDB
-│   └── index.js
+│   ├── db.helpers.js          # connectTestDB / clearTestDB / disconnectTestDB
+│   └── index.js               # re-exports all helpers
 ├── factories/
-│   └── user.factory.js
+│   ├── user.factory.js
+│   ├── chat.factory.js
+│   ├── message.factory.js
+│   └── request.factory.js
 ├── fixtures/
-│   └── test-avatar.jpg   # Minimal valid JPEG created on first run
-└── setup.js              # Jest global setup — mocks logger, Socket.io, S3
+│   └── test-avatar.jpg        # 1×1 JPEG, auto-created by beforeAll if absent
+└── setup.js                   # Global mocks: logger, Socket.io, S3
 ```
 
 ---
 
 ## Running Tests
 
-The default **`npm test`** runs Jest with **`--runInBand`** (one worker). With a **single shared** Postgres/Mongo/Redis for integration tests, parallel workers interleave HTTP requests and `clearTestDB` (`TRUNCATE` + deletes), which can trigger **Postgres deadlocks** — serial runs avoid that. **`npm run test:parallel`** runs the full suite with multiple workers and may still fail on integration; use it only if you accept flakiness or run **`npm run test:unit`** for a fast parallel check.
+The default `npm test` runs Jest with `--runInBand` (single worker). With a shared local database, parallel workers can interleave HTTP requests and `clearTestDB` calls, which triggers PostgreSQL deadlocks. Serial runs are reliable; parallel runs are faster but may flake on integration tests.
 
 ```bash
-# All tests with coverage (serial — reliable with one shared test DB)
+# Full suite with coverage — serial (recommended)
 npm test
 
-# Faster full suite (parallel workers — can deadlock integration tests if DB is shared)
+# Full suite — parallel workers (faster; may deadlock integration)
 npm run test:parallel
 
-# Watch mode (re-runs on file save)
-npm run test:watch
-
-# Unit tests only
+# Unit tests only — safe to parallelize
 npm run test:unit
 
-# Integration tests only (serial)
+# Integration tests only — always serial
 npm run test:integration
 
-# Same as npm test (serial full suite)
-npm run test:sequential
+# Watch mode — re-runs affected tests on save
+npm run test:watch
 
-# Attach Node inspector
+# Attach Node inspector for debugging
 npm run test:debug
 ```
 
-Coverage HTML report is written to `coverage/lcov-report/index.html`.
+Coverage HTML report: `coverage/lcov-report/index.html`
 
 ---
 
@@ -101,57 +107,60 @@ MONGODB_URI=mongodb://localhost:27017/fastchat_test
 POSTGRES_URI=postgresql://postgres:password@localhost:5432/fastchat_test
 REDIS_URI=redis://localhost:6379
 
-ACCESS_TOKEN_SECRET=test_access_token_secret_minimum_32_characters
+ACCESS_TOKEN_SECRET=test_access_token_secret_minimum_32_chars
 ACCESS_TOKEN_TTL=15m
 REFRESH_TOKEN_TTL=7d
 
 ALLOWED_ORIGINS=http://localhost:3000
 MAX_FILE_SIZE=5242880
 
-# AWS vars are required by envalid at startup even in test mode.
-# The values below are placeholders — S3 is fully mocked and no
-# real AWS calls are made during tests.
+# envalid requires these even in test mode.
+# S3 is mocked — no real AWS calls are ever made.
+S3_ENABLED=false
 AWS_REGION=us-east-1
 AWS_ACCESS_KEY_ID=test_key_id
 AWS_SECRET_ACCESS_KEY=test_secret_key
 S3_BUCKET_NAME=test-bucket
 ```
 
-Use a separate database name (e.g. `fastchat_test`) so tests never affect development data. Run `npm run migrate:up` once against this test database.
+Use a **separate database** (e.g. `fastchat_test`) so test runs never affect development data. Run migrations once against the test database:
+
+```bash
+POSTGRES_URI=postgresql://postgres:password@localhost:5432/fastchat_test npm run migrate:up
+```
 
 ---
 
-## Test Database Lifecycle
+## Database Lifecycle
 
-Each integration test file follows this lifecycle:
+Each integration test file follows this pattern:
 
-```javascript
+```js
+import { connectTestDB, clearTestDB, disconnectTestDB } from '../helpers'
+
 beforeAll(async () => {
-  await connectTestDB() // Connects MongoDB, PostgreSQL pool, Redis
+  await connectTestDB() // Connect MongoDB, PostgreSQL, Redis
 })
 
 beforeEach(async () => {
-  await clearTestDB() // Truncates all PG tables (CASCADE), drops all Mongo
-  // documents, flushes Redis
+  await clearTestDB() // TRUNCATE all PG tables (CASCADE), drop all Mongo docs, flush Redis
 })
 
 afterAll(async () => {
-  await disconnectTestDB() // Closes all connections gracefully
+  await disconnectTestDB() // Close all connections
 })
 ```
 
-`clearTestDB` uses a PL/pgSQL block to `TRUNCATE … CASCADE` every public table, ensuring referential integrity is never an obstacle to clean state.
+`clearTestDB` uses a PL/pgSQL block to `TRUNCATE … CASCADE` every public table, so referential integrity never prevents a clean reset.
 
 ---
 
-## Mocking Strategy
+## Global Mocks
 
-### Global mocks (`tests/setup.js`)
+Three modules are mocked for every test file via `setupFilesAfterEnv` in `tests/setup.js`:
 
-Three modules are mocked for every test file via `setupFilesAfterEnv`:
-
-```javascript
-// Suppress all logger output during test runs
+```js
+// Suppress all logger output so test output stays readable
 jest.mock('@config/logger', () => ({
   info: jest.fn(),
   error: jest.fn(),
@@ -159,15 +168,13 @@ jest.mock('@config/logger', () => ({
   debug: jest.fn(),
 }))
 
-// Prevent a real Socket.io server being spun up in HTTP tests
+// Prevent a real Socket.io server from spinning up in HTTP tests
 jest.mock('@sockets', () => ({
   init: jest.fn(),
-  io: {
-    to: jest.fn(() => ({ emit: jest.fn() })),
-  },
+  io: { to: jest.fn(() => ({ emit: jest.fn() })) },
 }))
 
-// Mock all S3 operations — no real AWS calls are ever made
+// Mock all S3 operations — no real AWS calls
 jest.mock('@services/s3.service', () => ({
   uploadFile: jest.fn().mockResolvedValue('https://s3.url/avatar'),
   deleteFile: jest.fn().mockResolvedValue(undefined),
@@ -176,34 +183,11 @@ jest.mock('@services/s3.service', () => ({
 
 The S3 mock means:
 
-- Avatar upload tests (`POST /users/me/avatar`) receive a fake URL `'https://s3.url/avatar'` as the stored avatar value.
-- Avatar delete tests (`DELETE /users/me/avatar`) confirm the DB field is cleared without triggering a real S3 `DeleteObjectCommand`.
-- Unit tests for `UserService` can assert that `s3Service.uploadFile` / `s3Service.deleteFile` were called with the correct arguments.
+- Avatar upload tests store the fake URL `'https://s3.url/avatar'` as the avatar value
+- Avatar delete tests confirm the DB field clears without triggering a real `DeleteObjectCommand`
+- Unit tests for `UserService` can assert that `s3Service.uploadFile` / `deleteFile` were called with correct arguments
 
-### Unit tests
-
-All external dependencies are mocked. The key mocks:
-
-```javascript
-// Repositories (used by services)
-jest.mock('@repositories')
-
-// bcrypt (CPU-intensive, no need to be real in unit tests)
-jest.mock('bcrypt', () => ({ compare: jest.fn(), hash: jest.fn() }))
-
-// Redis client (token repository)
-jest.mock('@config/redis', () => ({
-  getClient: () => ({ set: jest.fn(), get: jest.fn(), del: jest.fn() }),
-}))
-```
-
-The S3 service unit tests (`tests/unit/services/s3.service.test.js`) call `jest.unmock('@services/s3.service')` at the top of the file to opt out of the global mock and test the real implementation against a mocked `@aws-sdk/client-s3`.
-
-### Integration tests
-
-- MongoDB, PostgreSQL, and Redis are all **real** instances running on localhost (flushed/cleared between tests).
-- Socket.io and S3 are **mocked** globally (see above).
-- Avatar upload tests use a minimal real JPEG fixture (`tests/fixtures/test-avatar.jpg`) created automatically by `beforeAll` if it does not already exist. The file is a valid 1×1 pixel JPEG so that Multer's file type validation passes — the actual upload is intercepted by the S3 mock.
+The S3 service's own unit tests (`tests/unit/services/s3.service.test.js`) call `jest.unmock('@services/s3.service')` at the top of the file to opt out of the global mock and test the real implementation against a mocked `@aws-sdk/client-s3`.
 
 ---
 
@@ -211,28 +195,31 @@ The S3 service unit tests (`tests/unit/services/s3.service.test.js`) call `jest.
 
 ### `createTestUser(overrides?)`
 
-Inserts a user + profile row into PostgreSQL and issues a token pair. Returns `{ user, tokens }`.
+Inserts a user and profile row into PostgreSQL and issues a token pair. Returns `{ user, tokens }`.
 
-```javascript
+```js
 const { user, tokens } = await createTestUser()
 const admin = await createTestUser({ role: 'admin' })
+const withAvatar = await createTestUser({ avatar: 'https://s3.url/old-avatar' })
 ```
 
 ### `createTestUsers(count)`
 
 Calls `createTestUser` in a loop and returns an array.
 
-```javascript
+```js
 const [user1, user2, user3] = await createTestUsers(3)
 ```
 
 ### `createTestChat(creator, participantIds, overrides?)`
 
-Creates a Chat document in MongoDB. Adds the creator as a participant and (for group chats) as admin.
+Creates a Chat document in MongoDB. Adds the creator as a participant (and as admin for group chats).
 
-```javascript
+```js
+// Private chat
 const chat = await createTestChat(user1.user, [user2.user.id])
 
+// Group chat
 const group = await createTestChat(user1.user, [user2.user.id, user3.user.id], {
   type: 'group',
   groupName: 'Test Group',
@@ -243,36 +230,34 @@ const group = await createTestChat(user1.user, [user2.user.id, user3.user.id], {
 
 Creates a Message document in MongoDB.
 
-```javascript
+```js
 const msg = await createTestMessage(chat, user1.user, { content: 'Hello' })
 ```
 
-### Response assertion helpers
+### Assertion helpers
 
-```javascript
-// Assert a successful response
+```js
+// Assert success response shape
 expectSuccess(response, 201, 'User created successfully')
 
-// Assert an error response
+// Assert error response shape and code
 expectError(response, 400, 'VALIDATION_FAILED')
 
-// Assert pagination shape
+// Assert pagination fields are present and well-formed
 expectPagination(response)
 ```
 
 ### `generateUsername()` / `generateEmail()`
 
-Generate unique, schema-valid values for each test run.
+Generate unique, schema-valid identifiers for each test run using `@faker-js/faker`.
 
 ---
 
 ## Writing Tests
 
-### AAA pattern
+### Integration test pattern (AAA)
 
-Every test follows Arrange → Act → Assert:
-
-```javascript
+```js
 it('should update bio', async () => {
   // Arrange
   const { tokens } = await createTestUser()
@@ -289,34 +274,37 @@ it('should update bio', async () => {
 })
 ```
 
-### Naming convention
+### Unit test pattern
 
+```js
+// services/user.service.test.js
+jest.mock('@repositories')
+jest.mock('@services/s3.service')
+
+describe('UserService.updateAvatar', () => {
+  beforeEach(() => jest.clearAllMocks())
+
+  it('should delete old avatar before uploading new one', async () => {
+    userRepository.findById.mockResolvedValue({ id: 'uuid', avatar: 'https://old.s3.url' })
+    s3Service.deleteFile.mockResolvedValue(undefined)
+    s3Service.uploadFile.mockResolvedValue('https://new.s3.url')
+    userRepository.updateById.mockResolvedValue({ id: 'uuid', avatar: 'https://new.s3.url' })
+
+    await userService.updateAvatar('uuid', mockFile)
+
+    expect(s3Service.deleteFile).toHaveBeenCalledWith('https://old.s3.url')
+    expect(s3Service.uploadFile).toHaveBeenCalled()
+  })
+})
 ```
-should <expected result> [when <condition>]
-```
-
-Examples:
-
-- `should return 409 for duplicate email`
-- `should delete chat when last member leaves`
-- `should throw AuthenticationError when token is expired`
-- `should upload new avatar and delete old one from S3`
-
-### Test isolation
-
-- Each test is independent. Never rely on state created by a previous test.
-- Use `beforeEach` to reset the database.
-- Use `jest.clearAllMocks()` in `beforeEach` for unit tests.
 
 ### Testing S3 interactions
 
-Because `@services/s3.service` is mocked globally, assert on the mock functions rather than real S3 state:
-
-```javascript
+```js
 const s3Service = require('@services/s3.service')
 
-it('should delete old avatar when uploading a new one', async () => {
-  const { tokens } = await createTestUser({ avatar: 'https://old.s3.url/avatar' })
+it('should upload new avatar and delete old one', async () => {
+  const { user, tokens } = await createTestUser({ avatar: 'https://old.s3.url/avatar' })
 
   await request(app)
     .post('/api/v1/users/me/avatar')
@@ -330,8 +318,8 @@ it('should delete old avatar when uploading a new one', async () => {
 
 ### Testing error cases
 
-```javascript
-it('should return 401 for expired token', async () => {
+```js
+it('should return 401 for an expired token', async () => {
   const jwt = require('jsonwebtoken')
   const { env } = require('@config')
   const expired = jwt.sign({ id: 'x' }, env.ACCESS_TOKEN_SECRET, { expiresIn: '-1h' })
@@ -344,22 +332,38 @@ it('should return 401 for expired token', async () => {
 })
 ```
 
+### Test naming convention
+
+```
+should <expected result> [when <condition>]
+```
+
+Examples:
+
+- `should return 409 for duplicate email`
+- `should delete chat when last member leaves`
+- `should throw AuthenticationError when token is expired`
+
+### Test isolation
+
+- Every test is fully independent. Never rely on state created by a previous test.
+- Use `beforeEach` to reset the database in integration tests.
+- Use `jest.clearAllMocks()` in `beforeEach` for unit tests.
+
 ---
 
 ## Coverage Requirements
 
-Minimum thresholds enforced in `jest.config.js`:
+Minimum thresholds enforced in `jest.config.js` (build fails if not met):
 
 | Metric     | Threshold |
 | ---------- | --------- |
-| Branches   | 70%       |
-| Functions  | 70%       |
-| Lines      | 70%       |
-| Statements | 70%       |
+| Branches   | 85%       |
+| Functions  | 90%       |
+| Lines      | 90%       |
+| Statements | 90%       |
 
-The build fails if any threshold is not met.
-
-Target by layer:
+Target coverage by layer:
 
 | Layer        | Target                              |
 | ------------ | ----------------------------------- |
@@ -371,11 +375,17 @@ Target by layer:
 
 ---
 
+## Git Hook
+
+The `.husky/pre-commit` hook runs `npm run test:sequential` followed by `lint-staged` before every commit. A failing test blocks the commit. This ensures no broken code reaches the repository.
+
+---
+
 ## Debugging
 
 ```bash
 # Run a single test file
-npm test -- auth.test.js
+npm test -- tests/integration/auth.test.js
 
 # Run tests matching a name pattern
 npm test -- -t "should create a new user"
@@ -386,16 +396,16 @@ npm run test:debug
 
 Focus or skip individual tests:
 
-```javascript
-it.only('test just this one', async () => { … })
-it.skip('come back to this later', async () => { … })
+```js
+it.only('run just this one', async () => { … })
+it.skip('skip for now', async () => { … })
 ```
 
 ---
 
 ## Further Reading
 
-- [Jest Documentation](https://jestjs.io/docs/getting-started)
+- [Jest documentation](https://jestjs.io/docs/getting-started)
 - [Supertest](https://github.com/ladjs/supertest)
-- [Architecture Overview](ARCHITECTURE.md)
-- [REST API Reference](API_REST.md)
+- [Architecture Overview](ARCHITECTURE.md) — understand what each layer does before testing it
+- [REST API Reference](API_REST.md) — endpoint contracts that integration tests verify

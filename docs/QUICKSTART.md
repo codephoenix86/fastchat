@@ -1,23 +1,26 @@
 # Quick Start Guide
 
-Get fastchat running on your local machine in about 10 minutes.
-
-## Prerequisites
-
-| Requirement | Version   |
-| ----------- | --------- |
-| Node.js     | >= 18.0.0 |
-| npm         | >= 9.0.0  |
-| MongoDB     | >= 6.0    |
-| PostgreSQL  | >= 16     |
-| Redis       | >= 7.2    |
-| AWS Account | —         |
-
-All three databases must be running before the server will start. An AWS S3 bucket is required for avatar storage — the server will fail to start if the AWS environment variables are missing.
+Get fastchat running locally in about 10 minutes.
 
 ---
 
-## Step 1: Clone and Install
+## Prerequisites
+
+| Requirement | Version  |
+| ----------- | -------- |
+| Node.js     | ≥ 18.0.0 |
+| npm         | ≥ 9.0.0  |
+| MongoDB     | ≥ 6.0    |
+| PostgreSQL  | ≥ 16     |
+| Redis       | ≥ 7.2    |
+
+All three databases must be reachable before the server will start. The app exits immediately at startup if any connection fails or a required environment variable is missing.
+
+AWS S3 is **optional** (gated by `S3_ENABLED=true`). Avatar endpoints are simply unavailable when S3 is disabled — the rest of the API works normally.
+
+---
+
+## 1. Clone and Install
 
 ```bash
 git clone https://github.com/codephoenix86/fastchat.git
@@ -27,38 +30,37 @@ npm install
 
 ---
 
-## Step 2: Configure Environment
+## 2. Configure Environment
 
 ```bash
 cp .env.example .env
 ```
 
-Open `.env` and fill in the required values:
+Edit `.env` and fill in the required values:
 
 ```env
 NODE_ENV=development
 PORT=3000
 
-# MongoDB — stores chats and messages
+# Databases
 MONGODB_URI=mongodb://localhost:27017/fastchat
-
-# PostgreSQL — stores users and profiles
 POSTGRES_URI=postgresql://postgres:password@localhost:5432/fastchat
-
-# Redis — stores refresh tokens and online presence
 REDIS_URI=redis://localhost:6379
 
-# JWT secret — must be at least 32 characters
-ACCESS_TOKEN_SECRET=your_very_long_secret_at_least_32_characters_here
-
+# JWT — must be at least 32 characters
+ACCESS_TOKEN_SECRET=replace_with_a_long_random_secret_here
 ACCESS_TOKEN_TTL=15m
 REFRESH_TOKEN_TTL=7d
 
-# AWS S3 — stores user avatar images
-AWS_REGION=us-east-1
-AWS_ACCESS_KEY_ID=your_aws_access_key_id
-AWS_SECRET_ACCESS_KEY=your_aws_secret_access_key
-S3_BUCKET_NAME=your_s3_bucket_name
+# CORS (comma-separated origins)
+ALLOWED_ORIGINS=http://localhost:3000
+
+# Avatar storage (optional)
+S3_ENABLED=false
+# AWS_REGION=us-east-1
+# AWS_ACCESS_KEY_ID=...
+# AWS_SECRET_ACCESS_KEY=...
+# S3_BUCKET_NAME=...
 ```
 
 Generate a secure JWT secret in one command:
@@ -67,9 +69,9 @@ Generate a secure JWT secret in one command:
 node -e "console.log(require('crypto').randomBytes(32).toString('hex'))"
 ```
 
-### AWS S3 Setup
+### AWS S3 Setup (optional)
 
-Create an S3 bucket and an IAM user with the following minimum policy. Replace `your_s3_bucket_name` with your actual bucket name:
+To enable avatar uploads, set `S3_ENABLED=true` and provide all four AWS variables. The IAM user needs only these two S3 permissions on your bucket:
 
 ```json
 {
@@ -78,7 +80,7 @@ Create an S3 bucket and an IAM user with the following minimum policy. Replace `
     {
       "Effect": "Allow",
       "Action": ["s3:PutObject", "s3:DeleteObject"],
-      "Resource": "arn:aws:s3:::your_s3_bucket_name/*"
+      "Resource": "arn:aws:s3:::YOUR_BUCKET_NAME/*"
     }
   ]
 }
@@ -86,9 +88,9 @@ Create an S3 bucket and an IAM user with the following minimum policy. Replace `
 
 ---
 
-## Step 3: Start the Databases
+## 3. Start the Databases
 
-### Using Docker (recommended)
+### Option A — Docker (recommended for local dev)
 
 ```bash
 # MongoDB
@@ -104,19 +106,21 @@ docker run -d -p 5432:5432 --name fastchat-pg \
 docker run -d -p 6379:6379 --name fastchat-redis redis:7.2-alpine
 ```
 
-Or use the provided `compose.yml` (requires a built image):
+### Option B — Docker Compose (infrastructure only)
+
+Spin up just the databases from the provided `compose.yml`:
 
 ```bash
 docker compose up mongodb postgres redis -d
 ```
 
-### Using system services
+> The Compose file is configured for the full stack including the app image. To use it for local dev with a local `node` process, start only the database services as shown above.
+
+### Option C — System services
 
 ```bash
 # macOS (Homebrew)
-brew services start mongodb-community
-brew services start postgresql
-brew services start redis
+brew services start mongodb-community postgresql redis
 
 # Ubuntu / Debian
 sudo systemctl start mongod postgresql redis-server
@@ -124,37 +128,39 @@ sudo systemctl start mongod postgresql redis-server
 
 ---
 
-## Step 4: Create Required Directories
+## 4. Run PostgreSQL Migrations
 
-```bash
-mkdir -p logs
-```
-
----
-
-## Step 5: Run PostgreSQL Migrations
-
-fastchat uses [node-pg-migrate](https://github.com/salsita/node-pg-migrate) to manage the PostgreSQL schema. You must run migrations before starting the server for the first time.
+fastchat uses [node-pg-migrate](https://github.com/salsita/node-pg-migrate) to manage the PostgreSQL schema. Run this once before starting the server for the first time, and again after pulling changes that include new migrations:
 
 ```bash
 npm run migrate:up
 ```
 
-This creates the `users` and `profiles` tables (and the `pgcrypto` extension needed for UUID generation).
+This creates the `pgcrypto` extension, the `user_role` enum, and the `users` and `profiles` tables.
 
 ---
 
-## Step 6: Start the Server
+## 5. Create the Logs Directory
 
 ```bash
-# Development (auto-reload on file changes)
+mkdir -p logs
+```
+
+Winston writes rotating log files here. The directory must exist before the server starts.
+
+---
+
+## 6. Start the Server
+
+```bash
+# Development — auto-reloads on file changes
 npm run dev
 
 # Production
 npm start
 ```
 
-A successful startup looks like:
+A successful startup prints:
 
 ```
 info: All databases connected
@@ -162,17 +168,17 @@ info: Socket.io server initialized
 info: Server listening on port 3000
 ```
 
-If any database connection fails, or if the AWS environment variables are missing/invalid, the process exits immediately with a logged error.
+If any database is unreachable, the process exits with a connection error message identifying which one failed.
 
 ---
 
-## Step 7: Verify with a Health Check
+## 7. Verify with a Health Check
 
 ```bash
 curl http://localhost:3000/health
 ```
 
-Expected response:
+Expected response (`status: "OK"` means all databases are reachable):
 
 ```json
 {
@@ -189,48 +195,60 @@ Expected response:
 }
 ```
 
-If `status` is `DEGRADED`, check the `checks` object to see which database is unreachable.
+If `status` is `"DEGRADED"`, check the `checks` object to identify which database is unreachable.
 
 ---
 
-## Step 8: Try the API
+## 8. Try the API
 
-### Create a user
+### Register a user
 
 ```bash
-curl -X POST http://localhost:3000/api/v1/auth/signup \
+curl -s -X POST http://localhost:3000/api/v1/auth/signup \
   -H "Content-Type: application/json" \
-  -d '{
-    "username": "alice",
-    "email": "alice@example.com",
-    "password": "Password@123"
-  }'
+  -d '{"username": "alice", "email": "alice@example.com", "password": "Password@123"}'
 ```
 
-### Log in
+### Log in and capture tokens
 
 ```bash
-curl -X POST http://localhost:3000/api/v1/auth/login \
+curl -s -X POST http://localhost:3000/api/v1/auth/login \
   -H "Content-Type: application/json" \
   -d '{"username": "alice", "password": "Password@123"}'
 ```
 
 Save the `accessToken` and `refreshToken` from the response.
 
-### Get your profile
+### Fetch your profile
 
 ```bash
-curl http://localhost:3000/api/v1/users/me \
+curl -s http://localhost:3000/api/v1/users/me \
   -H "Authorization: Bearer <accessToken>"
 ```
 
 ---
 
-## Next Steps
+## Deployment with Docker
 
-- **[REST API Reference](API_REST.md)** — full endpoint catalogue
-- **[WebSocket API](API_WEBSOCKET.md)** — real-time connection guide
-- **[Architecture Overview](ARCHITECTURE.md)** — understand how the databases and S3 are used
+The repository includes a multi-stage `Dockerfile` that produces a minimal production image:
+
+```bash
+docker build -t fastchat .
+docker run -p 3000:3000 --env-file .env fastchat
+```
+
+Or pull the published image:
+
+```bash
+docker pull nareshlohar86/fastchat
+docker run -p 3000:3000 --env-file .env nareshlohar86/fastchat
+```
+
+For production, run migrations against your production database before starting the container:
+
+```bash
+POSTGRES_URI=<prod-uri> npm run migrate:up
+```
 
 ---
 
@@ -238,49 +256,57 @@ curl http://localhost:3000/api/v1/users/me \
 
 ### `connect ECONNREFUSED` for any database
 
-The relevant database is not running. Start it and retry.
+The relevant database is not running. Check with:
 
 ```bash
-# Check running containers
-docker ps
-
-# Or check system services
-sudo systemctl status mongod postgresql redis-server
+docker ps                                        # if using containers
+sudo systemctl status mongod postgresql redis-server  # if using system services
 ```
 
-### `ACCESS_TOKEN_SECRET must be at least 32 characters long`
+### `ACCESS_TOKEN_SECRET must be at least 32 characters`
 
-Your `.env` secret is too short. Generate a proper one:
+Your secret in `.env` is too short. Generate a proper one:
 
 ```bash
 node -e "console.log(require('crypto').randomBytes(32).toString('hex'))"
 ```
 
-### `Invalid environment variables` mentioning AWS
+### `Invalid environment variables`
 
-One or more of `AWS_REGION`, `AWS_ACCESS_KEY_ID`, `AWS_SECRET_ACCESS_KEY`, or `S3_BUCKET_NAME` is missing from `.env`. All four are required — the server will not start without them. See Step 2 for details.
+The startup env validator (`envalid`) rejected one or more variables. The error message lists which ones. Check spelling and that required values are not empty.
+
+### `relation "users" does not exist`
+
+Migrations have not been run against this database. Execute:
+
+```bash
+npm run migrate:up
+```
 
 ### Port 3000 already in use
 
 ```bash
-# Find the process
-lsof -ti:3000
-
-# Kill it
+# Find and kill the process
 kill -9 $(lsof -ti:3000)
 
-# Or change the port in .env
-PORT=3001
+# Or change the port
+PORT=3001 npm run dev
 ```
 
-### PostgreSQL `relation "users" does not exist`
+### Avatar upload returns 500
 
-Migrations have not been run. Execute `npm run migrate:up`.
+Verify that:
 
-### `relation already exists` on `migrate:up`
+- `S3_ENABLED=true` is set in `.env`
+- All four AWS variables (`AWS_REGION`, `AWS_ACCESS_KEY_ID`, `AWS_SECRET_ACCESS_KEY`, `S3_BUCKET_NAME`) are present and correct
+- The IAM user has `s3:PutObject` and `s3:DeleteObject` on the bucket
+- `AWS_REGION` matches the bucket's actual region
 
-The migration was already applied. This is safe to ignore; node-pg-migrate tracks which migrations have run.
+---
 
-### Avatar upload returns 500 / S3 errors
+## Next Steps
 
-Check that the IAM user has `s3:PutObject` and `s3:DeleteObject` permissions on the configured bucket, and that `AWS_REGION` matches the bucket's actual region.
+- [REST API Reference](API_REST.md) — full endpoint catalogue with request/response shapes
+- [WebSocket API Reference](API_WEBSOCKET.md) — Socket.io connection guide and event reference
+- [Architecture Overview](ARCHITECTURE.md) — how the layers, databases, and patterns fit together
+- [Testing Guide](TESTING.md) — run and write tests
