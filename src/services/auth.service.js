@@ -12,10 +12,7 @@ class AuthService {
     const password_hash = await bcrypt.hash(password, 10)
     const user = await userService.createUser({ email, username, password_hash })
 
-    logger.info('User registered successfully', {
-      userId: user.id,
-      username: user.username,
-    })
+    logger.info('User registered', { userId: user.id })
 
     return {
       id: user.id,
@@ -28,14 +25,13 @@ class AuthService {
   async authenticate(identifier, password) {
     const user = await userService.getUserByIdentifier(identifier)
     if (!user) {
-      logger.warn('Login attempt with invalid credentials', { identifier })
+      // Log without identifier to avoid leaking PII/usernames in logs.
+      logger.warn('Login failed: user not found')
       throw new AuthenticationError('Invalid email/username or password', 'INVALID_CREDENTIALS')
     }
     const match = await bcrypt.compare(password, user.password_hash)
     if (!match) {
-      logger.warn('Login attempt with incorrect password', {
-        userId: user.id,
-      })
+      logger.warn('Login failed: incorrect password', { userId: user.id })
       throw new AuthenticationError('Invalid email/username or password', 'INVALID_CREDENTIALS')
     }
     return user
@@ -48,10 +44,7 @@ class AuthService {
     const user = await this.authenticate(identifier, password)
     const tokens = await tokenService.issueTokenPair(user)
 
-    logger.info('User logged in successfully', {
-      userId: user.id,
-      username: user.username,
-    })
+    logger.info('User logged in', { userId: user.id })
 
     return {
       user: {
@@ -66,7 +59,6 @@ class AuthService {
 
   async logout(refreshToken) {
     await tokenService.revokeSession(refreshToken)
-    logger.info('Session terminated successfully')
   }
 
   async refreshSession(refreshToken) {

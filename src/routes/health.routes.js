@@ -40,7 +40,7 @@ router.get('/', async (req, res) => {
   } catch (err) {
     health.checks.mongodb = 'error'
     health.status = 'DEGRADED'
-    logger.error('Health check - MongoDB ping failed', { error: err.message })
+    logger.error('Health check: MongoDB ping failed', { err })
   }
 
   try {
@@ -50,7 +50,7 @@ router.get('/', async (req, res) => {
   } catch (err) {
     health.checks.postgresql = 'error'
     health.status = 'DEGRADED'
-    logger.error('Health check - PostgreSQL query failed', { error: err.message })
+    logger.error('Health check: PostgreSQL query failed', { err })
   }
 
   try {
@@ -60,7 +60,7 @@ router.get('/', async (req, res) => {
   } catch (err) {
     health.checks.redis = 'error'
     health.status = 'DEGRADED'
-    logger.error('Health check - Redis ping failed', { error: err.message })
+    logger.error('Health check: Redis ping failed', { err })
   }
 
   const statusCode = health.status === 'OK' ? StatusCodes.OK : StatusCodes.SERVICE_UNAVAILABLE

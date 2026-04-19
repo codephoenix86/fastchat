@@ -10,7 +10,6 @@ class UserService {
    */
   async createUser(userData) {
     const user = await userRepository.create(userData)
-    logger.info('User created successfully', { userId: user.id })
     return this.formatUser(user)
   }
   async getUserByIdentifier(identifier) {
@@ -56,7 +55,6 @@ class UserService {
       throw new NotFoundError('User not found')
     }
     const updatedUser = await userRepository.updateById(userId, updateData)
-    logger.info('User updated successfully', { userId })
     return this.formatUser(updatedUser)
   }
 
@@ -73,19 +71,13 @@ class UserService {
     if (user.avatar) {
       try {
         await s3Service.deleteFile(user.avatar)
-        logger.info('Avatar file deleted', { userId })
       } catch (err) {
-        logger.warn('Failed to delete avatar file', {
-          userId,
-          error: err.message,
-          stack: err.stack,
-          name: err.name,
-        })
+        // Non-fatal: proceed with account deletion even if S3 cleanup fails.
+        logger.warn('Failed to delete avatar during user deletion', { userId, err })
       }
     }
 
     const deleted = await userRepository.findByIdAndDelete(userId)
-    logger.info('User deleted successfully', { userId })
     return this.formatUser(deleted)
   }
 
@@ -97,14 +89,8 @@ class UserService {
     if (user.avatar) {
       try {
         await s3Service.deleteFile(user.avatar)
-        logger.info('Old avatar deleted from storage', { userId, filename: user.avatar })
       } catch (err) {
-        logger.warn('Failed to delete old avatar file', {
-          error: err.message,
-          stack: err.stack,
-          name: err.name,
-          userId,
-        })
+        logger.warn('Failed to delete avatar from storage', { userId, err })
         throw err
       }
     }
@@ -121,18 +107,12 @@ class UserService {
       throw new NotFoundError('User not found')
     }
 
-    // Delete old avatar if exists
     if (user.avatar) {
       try {
         await s3Service.deleteFile(user.avatar)
-        logger.info('Old avatar deleted from storage', { userId, filename: user.avatar })
       } catch (err) {
-        logger.warn('Failed to delete old avatar file', {
-          error: err.message,
-          stack: err.stack,
-          name: err.name,
-          userId,
-        })
+        // Non-fatal: old avatar cleanup failure should not block the upload.
+        logger.warn('Failed to delete old avatar from storage', { userId, err })
       }
     }
 
@@ -140,15 +120,9 @@ class UserService {
     try {
       const url = await s3Service.uploadFile(file.buffer, filename, file.mimetype)
       const updated = await userRepository.updateById(userId, { avatar: url })
-      logger.info('User avatar updated', { userId, filename })
       return this.formatUser(updated)
     } catch (err) {
-      logger.warn('Failed to upload avatar file', {
-        error: err.message,
-        stack: err.stack,
-        name: err.name,
-        userId,
-      })
+      logger.warn('Failed to upload avatar', { userId, err })
       throw err
     }
   }
@@ -171,7 +145,7 @@ class UserService {
     const password_hash = await bcrypt.hash(newPassword, 10)
     await userRepository.updateById(userId, { password_hash })
 
-    logger.info('Password changed successfully', { userId })
+    logger.info('Password changed', { userId })
   }
 
   /**

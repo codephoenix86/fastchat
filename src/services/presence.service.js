@@ -1,30 +1,19 @@
 const { redis } = require('@config')
-const { logger } = require('@config')
 const client = redis.getClient()
+
 class PresenceService {
   async addSocket(userId, socketId) {
     const key = `online:${userId}`
     await client.sadd(key, socketId)
     const count = await client.scard(key)
-    const isFirstConnection = count === 1
-    logger.debug('Socket added', {
-      userId,
-      socketId,
-      isFirstConnection,
-    })
-    return isFirstConnection
+    return count === 1 // isFirstConnection
   }
+
   async removeSocket(userId, socketId) {
     const key = `online:${userId}`
     const count = await client.scard(key)
     await client.srem(key, socketId)
-    const isLastConnection = count === 1
-    logger.debug('Socket removed', {
-      userId,
-      socketId,
-      isLastConnection,
-    })
-    return isLastConnection
+    return count === 1 // isLastConnection
   }
   async getUserSockets(userId) {
     const key = `online:${userId}`

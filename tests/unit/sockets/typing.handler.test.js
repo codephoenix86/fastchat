@@ -55,12 +55,9 @@ describe('typingHandler', () => {
       })
     })
 
-    it('logs debug with userId, chatId, socketId', () => {
+    it('does not log on typing start', () => {
       socket._trigger(SOCKET_EVENTS.TYPING_START, { chatId: 'chat-1' })
-      expect(mockLogger.debug).toHaveBeenCalledWith(
-        'User started typing',
-        expect.objectContaining({ userId: socket.userId, chatId: 'chat-1', socketId: socket.id })
-      )
+      expect(mockLogger.debug).not.toHaveBeenCalled()
     })
 
     it('uses socket.to (not socket.emit) so sender is excluded', () => {
@@ -88,12 +85,9 @@ describe('typingHandler', () => {
       })
     })
 
-    it('logs debug with userId, chatId, socketId', () => {
+    it('does not log on typing stop', () => {
       socket._trigger(SOCKET_EVENTS.TYPING_STOP, { chatId: 'chat-2' })
-      expect(mockLogger.debug).toHaveBeenCalledWith(
-        'User stopped typing',
-        expect.objectContaining({ userId: socket.userId, chatId: 'chat-2', socketId: socket.id })
-      )
+      expect(mockLogger.debug).not.toHaveBeenCalled()
     })
 
     it('emits to the correct room', () => {

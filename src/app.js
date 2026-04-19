@@ -2,6 +2,7 @@ const express = require('express')
 const cors = require('cors')
 const helmet = require('helmet')
 const crypto = require('crypto')
+const onFinished = require('on-finished')
 const app = express()
 
 app.set('trust proxy', true)
@@ -37,23 +38,46 @@ app.use(cors(corsOptions))
 app.use(express.json({ limit: '10mb' }))
 app.use(express.urlencoded({ extended: true, limit: '10mb' }))
 
-// Add request ID to all requests
+// Assign a unique ID to every request for end-to-end traceability.
 app.use((req, res, next) => {
   req.id = crypto.randomUUID()
+  res.setHeader('X-Request-Id', req.id)
   next()
 })
 
 // Sanitize user input
 app.use(sanitize)
 
-// Request logging middleware
+// Log one entry per request on response finish so we capture status + duration.
+// Health checks are excluded to avoid polluting logs with high-frequency noise.
 app.use((req, res, next) => {
-  logger.info('Incoming request', {
-    method: req.method,
-    url: req.originalUrl,
-    ip: req.ip,
-    requestId: req.id,
+  if (req.path === '/health') {
+    return next()
+  }
+
+  const startedAt = process.hrtime.bigint()
+
+  onFinished(res, () => {
+    const durationMs = Number(process.hrtime.bigint() - startedAt) / 1e6
+    let level
+    if (res.statusCode >= 500) {
+      level = 'error'
+    } else if (res.statusCode >= 400) {
+      level = 'warn'
+    } else {
+      level = 'info'
+    }
+    logger[level]('HTTP request', {
+      method: req.method,
+      url: req.originalUrl,
+      status: res.statusCode,
+      durationMs: Math.round(durationMs),
+      ip: req.ip,
+      requestId: req.id,
+      userId: req.user?.id,
+    })
   })
+
   next()
 })
 

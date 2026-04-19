@@ -39,7 +39,7 @@ describe('socket authenticate middleware', () => {
       const socket = makeSocket()
       authenticate(socket, next)
       expect(mockLogger.warn).toHaveBeenCalledWith(
-        'Socket connection attempt without token',
+        'Socket connection rejected: missing token',
         expect.objectContaining({ socketId: socket.id, address: socket.handshake.address })
       )
     })
@@ -79,16 +79,14 @@ describe('socket authenticate middleware', () => {
       expect(next).toHaveBeenCalledTimes(1)
     })
 
-    it('logs debug on successful authentication', () => {
+    it('does not log on successful authentication', () => {
       mockTokenService.verifyAccessToken.mockReturnValue({ id: 'user-debug' })
       const socket = makeSocket({
         handshake: { auth: { token: 'tok' }, headers: {}, address: '127.0.0.1' },
       })
       authenticate(socket, next)
-      expect(mockLogger.debug).toHaveBeenCalledWith(
-        'Socket authenticated',
-        expect.objectContaining({ socketId: socket.id, userId: 'user-debug' })
-      )
+      expect(mockLogger.debug).not.toHaveBeenCalled()
+      expect(mockLogger.warn).not.toHaveBeenCalled()
     })
   })
 
@@ -127,16 +125,17 @@ describe('socket authenticate middleware', () => {
     })
 
     it('logs a warning on authentication failure', () => {
+      const err = new Error('invalid signature')
       mockTokenService.verifyAccessToken.mockImplementation(() => {
-        throw new Error('invalid signature')
+        throw err
       })
       const socket = makeSocket({
         handshake: { auth: { token: 'bad-token' }, headers: {}, address: '127.0.0.1' },
       })
       authenticate(socket, next)
       expect(mockLogger.warn).toHaveBeenCalledWith(
-        'Socket authentication failed',
-        expect.objectContaining({ error: 'invalid signature', socketId: socket.id })
+        'Socket connection rejected: invalid token',
+        expect.objectContaining({ err, socketId: socket.id })
       )
     })
 
@@ -151,7 +150,7 @@ describe('socket authenticate middleware', () => {
       expect(socket.userId).toBeUndefined()
     })
 
-    it('includes stack and name in warning log', () => {
+    it('passes the Error object as err field in warning log', () => {
       const err = new Error('jwt malformed')
       err.name = 'JsonWebTokenError'
       mockTokenService.verifyAccessToken.mockImplementation(() => {
@@ -162,8 +161,8 @@ describe('socket authenticate middleware', () => {
       })
       authenticate(socket, next)
       expect(mockLogger.warn).toHaveBeenCalledWith(
-        'Socket authentication failed',
-        expect.objectContaining({ stack: err.stack, name: err.name })
+        'Socket connection rejected: invalid token',
+        expect.objectContaining({ err })
       )
     })
   })

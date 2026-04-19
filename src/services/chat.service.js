@@ -28,11 +28,7 @@ class ChatService {
       participants,
     })
 
-    logger.info('Chat created successfully', {
-      chatId: chat._id,
-      type,
-      creatorId,
-    })
+    logger.info('Chat created', { chatId: chat._id, type, creatorId })
 
     return this.formatChat(chat)
   }
@@ -111,7 +107,7 @@ class ChatService {
     }
     const updated = await chatRepository.findByIdAndUpdate(chatId, { $set: updates })
 
-    logger.info('Chat updated', { chatId, userId, updates })
+    logger.info('Chat updated', { chatId, userId })
 
     return this.formatChat(updated)
   }
@@ -133,7 +129,7 @@ class ChatService {
     }
 
     await chatRepository.findByIdAndDelete(chatId)
-    logger.info('Chat deleted', { chatId, userId })
+    logger.info('Chat deleted', { chatId })
   }
 
   async addMember(chatId, userId, memberIdToAdd = null) {
@@ -162,7 +158,7 @@ class ChatService {
       $addToSet: { participants: memberToAdd },
     })
 
-    logger.info('Member added to chat', { chatId, userId, memberToAdd })
+    logger.info('Member added to chat', { chatId, memberId: memberToAdd })
   }
 
   async removeMember(chatId, userId, memberIdToRemove) {
@@ -200,13 +196,12 @@ class ChatService {
       $pull: { participants: memberIdToRemove },
     })
 
-    // Delete chat if empty (last member left)
     if (chat.participants.length === 1) {
       await chatRepository.findByIdAndDelete(chatId)
-      logger.info('Empty group deleted', { chatId })
+      logger.info('Empty group auto-deleted', { chatId })
     }
 
-    logger.info('Member removed from chat', { chatId, userId, memberIdToRemove })
+    logger.info('Member removed from chat', { chatId, memberId: memberIdToRemove })
   }
 
   async getMembers(chatId, userId) {

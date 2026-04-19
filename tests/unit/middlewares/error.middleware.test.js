@@ -1,7 +1,7 @@
 const { StatusCodes } = require('http-status-codes')
 
 const mockEnv = { NODE_ENV: 'test' }
-const mockLogger = { error: jest.fn() }
+const mockLogger = { error: jest.fn(), warn: jest.fn() }
 
 jest.mock('@config', () => ({
   env: mockEnv,
@@ -128,20 +128,23 @@ describe('error.middleware — stack trace', () => {
 })
 
 describe('error.middleware — logger', () => {
-  it('calls logger.error with error context', () => {
+  it('calls logger.warn for operational errors', () => {
     const err = new AuthorizationError('Forbidden')
-    const req = makeReq({ originalUrl: '/api/v1/test', method: 'GET', ip: '10.0.0.1', id: 'r1' })
+    const req = makeReq({ originalUrl: '/api/v1/test', method: 'GET', id: 'r1' })
+    handleError(err, req, makeRes(), jest.fn())
+    expect(mockLogger.warn).toHaveBeenCalledWith(
+      'Unhandled error',
+      expect.objectContaining({ err, requestId: 'r1', method: 'GET', url: '/api/v1/test' })
+    )
+  })
+
+  it('calls logger.error for non-operational errors', () => {
+    const err = new Error('Unexpected crash')
+    const req = makeReq({ id: 'r2' })
     handleError(err, req, makeRes(), jest.fn())
     expect(mockLogger.error).toHaveBeenCalledWith(
-      err.name,
-      expect.objectContaining({
-        code: err.code,
-        message: err.message,
-        url: '/api/v1/test',
-        method: 'GET',
-        ip: '10.0.0.1',
-        requestId: 'r1',
-      })
+      'Unhandled error',
+      expect.objectContaining({ err, requestId: 'r2' })
     )
   })
 })

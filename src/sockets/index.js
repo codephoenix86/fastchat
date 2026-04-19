@@ -22,46 +22,32 @@ const init = (server) => {
   // Apply authentication middleware
   io.use(authMiddleware)
   io.on(SOCKET_EVENTS.CONNECTION, async (socket) => {
-    const userId = socket.userId
+    const { userId } = socket
     const socketId = socket.id
-    logger.info('New socket connected', {
-      socketId,
-      userId,
-    })
-    // Register all event handlers
+
+    logger.info('Socket connected', { socketId, userId })
+
     registerChatHandlers(io, socket)
     registerMessageHandlers(io, socket)
     registerTypingHandlers(io, socket)
-    // Add socket to online users
+
     const isFirstConnection = await presenceService.addSocket(userId, socketId)
     if (isFirstConnection) {
-      // Broadcast user online status
       socket.broadcast.emit(SOCKET_EVENTS.USER_ONLINE, { userId })
-      logger.info('User came online', {
-        userId,
-        socketId,
-      })
+      logger.debug('User came online', { userId })
     }
-    // Handle disconnect
+
     socket.on(SOCKET_EVENTS.DISCONNECT, async (reason) => {
-      logger.info('Socket disconnected', {
-        socketId,
-        userId,
-        reason,
-      })
-      // Remove socket from online users
+      logger.info('Socket disconnected', { socketId, userId, reason })
+
       const isLastConnection = await presenceService.removeSocket(userId, socketId)
-      // If user has no more active sockets
       if (isLastConnection) {
-        // Broadcast user offline status
         socket.broadcast.emit(SOCKET_EVENTS.USER_OFFLINE, { userId })
-        logger.info('User went offline', {
-          userId,
-          socketId,
-        })
+        logger.debug('User went offline', { userId })
       }
     })
   })
+
   logger.info('Socket.io server initialized')
   return io
 }

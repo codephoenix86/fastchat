@@ -2,13 +2,7 @@ const mongoose = require('mongoose')
 const logger = require('./logger')
 const env = require('./env')
 
-mongoose.connection.on('error', (err) => {
-  logger.error('MongoDB connection error', {
-    error: err.message,
-    stack: err.stack,
-    name: err.name,
-  })
-})
+mongoose.connection.on('error', (err) => logger.error('MongoDB connection error', { err }))
 mongoose.connection.on('disconnected', () => logger.warn('MongoDB disconnected'))
 mongoose.connection.on('reconnected', () => logger.info('MongoDB reconnected'))
 

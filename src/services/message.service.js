@@ -25,12 +25,6 @@ class MessageService {
       status: MESSAGE_STATUS.SENT,
     })
 
-    logger.info('Message sent', {
-      messageId: message._id,
-      chatId,
-      senderId,
-    })
-
     return this.formatMessage(message)
   }
 
@@ -99,8 +93,6 @@ class MessageService {
     message.content = content
     await message.save()
 
-    logger.info('Message updated', { messageId, userId })
-
     return this.formatMessage(message)
   }
 
@@ -117,8 +109,6 @@ class MessageService {
     }
 
     await messageRepository.findByIdAndDelete(messageId)
-
-    logger.info('Message deleted', { messageId, userId })
   }
 
   async updateMessageStatus(messageId, status) {

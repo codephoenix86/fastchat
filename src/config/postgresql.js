@@ -11,13 +11,7 @@ const getPool = () => {
       max: env.POSTGRES_POOL_MAX,
       idleTimeoutMillis: env.POSTGRES_POOL_IDLE_TIMEOUT_MS,
     })
-    pool.on('error', (err) => {
-      logger.error('PostgreSQL connection error', {
-        error: err.message,
-        stack: err.stack,
-        name: err.name,
-      })
-    })
+    pool.on('error', (err) => logger.error('PostgreSQL pool error', { err }))
   }
   return pool
 }

@@ -58,13 +58,10 @@ describe('messageHandler', () => {
       expect(messageService.updateMessageStatus).toHaveBeenCalledWith('msg-1', 'delivered')
     })
 
-    it('logs debug on success', async () => {
+    it('does not log on success', async () => {
       messageService.updateMessageStatus.mockResolvedValue({})
       await socket._trigger(SOCKET_EVENTS.MESSAGE_DELIVERED, { messageId: 'msg-1' })
-      expect(mockLogger.debug).toHaveBeenCalledWith(
-        'Message delivered',
-        expect.objectContaining({ userId: socket.userId, messageId: 'msg-1', socketId: socket.id })
-      )
+      expect(mockLogger.debug).not.toHaveBeenCalled()
     })
 
     it('catches error and logs it without re-throwing', async () => {
@@ -75,8 +72,8 @@ describe('messageHandler', () => {
         socket._trigger(SOCKET_EVENTS.MESSAGE_DELIVERED, { messageId: 'msg-fail' })
       ).resolves.toBeUndefined()
       expect(mockLogger.error).toHaveBeenCalledWith(
-        'Error updating message status to delivered',
-        expect.objectContaining({ messageId: 'msg-fail', error: err.message, name: err.name })
+        'Failed to update message status via socket',
+        expect.objectContaining({ messageId: 'msg-fail', status: 'delivered', err })
       )
     })
 
@@ -95,13 +92,10 @@ describe('messageHandler', () => {
       expect(messageService.updateMessageStatus).toHaveBeenCalledWith('msg-2', 'read')
     })
 
-    it('logs debug on success', async () => {
+    it('does not log on success', async () => {
       messageService.updateMessageStatus.mockResolvedValue({})
       await socket._trigger(SOCKET_EVENTS.MESSAGE_READ, { messageId: 'msg-2' })
-      expect(mockLogger.debug).toHaveBeenCalledWith(
-        'Message read',
-        expect.objectContaining({ userId: socket.userId, messageId: 'msg-2', socketId: socket.id })
-      )
+      expect(mockLogger.debug).not.toHaveBeenCalled()
     })
 
     it('catches error and logs it without re-throwing', async () => {
@@ -112,18 +106,18 @@ describe('messageHandler', () => {
         socket._trigger(SOCKET_EVENTS.MESSAGE_READ, { messageId: 'msg-fail-read' })
       ).resolves.toBeUndefined()
       expect(mockLogger.error).toHaveBeenCalledWith(
-        'Error updating message status to read:',
-        expect.objectContaining({ messageId: 'msg-fail-read', error: err.message, name: err.name })
+        'Failed to update message status via socket',
+        expect.objectContaining({ messageId: 'msg-fail-read', status: 'read', err })
       )
     })
 
-    it('includes stack in error log', async () => {
+    it('passes the Error object as err field in error log', async () => {
       const err = new Error('stack error')
       messageService.updateMessageStatus.mockRejectedValue(err)
       await socket._trigger(SOCKET_EVENTS.MESSAGE_READ, { messageId: 'msg-stack' })
       expect(mockLogger.error).toHaveBeenCalledWith(
-        expect.any(String),
-        expect.objectContaining({ stack: err.stack })
+        'Failed to update message status via socket',
+        expect.objectContaining({ err })
       )
     })
   })

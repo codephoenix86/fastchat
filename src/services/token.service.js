@@ -70,7 +70,7 @@ class TokenService {
     const storedUserId = await tokenRepository.getUserIdByToken(refreshToken)
 
     if (!storedUserId) {
-      logger.warn('Invalid or expired refresh token attempt')
+      logger.warn('Refresh token not found or expired')
       throw new AuthenticationError(
         'Session expired or invalid. Please log in again.',
         'REFRESH_TOKEN_REVOKED'
@@ -84,10 +84,7 @@ class TokenService {
     // Burn the old token
     await tokenRepository.deleteRefreshToken(refreshToken)
 
-    // Issue a brand new pair
     const tokens = await this.issueTokenPair(user)
-
-    logger.info('Tokens rotated successfully', { userId: user.id })
     return tokens
   }
 

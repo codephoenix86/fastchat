@@ -11,7 +11,7 @@ const authenticate = (socket, next) => {
     const token = socket.handshake.auth.token || socket.handshake.headers.token
 
     if (!token) {
-      logger.warn('Socket connection attempt without token', {
+      logger.warn('Socket connection rejected: missing token', {
         socketId: socket.id,
         address: socket.handshake.address,
       })
@@ -20,19 +20,11 @@ const authenticate = (socket, next) => {
 
     const user = tokenService.verifyAccessToken(token)
     socket.userId = user.id
-
-    logger.debug('Socket authenticated', {
-      socketId: socket.id,
-      userId: user.id,
-    })
-
     next()
   } catch (err) {
-    logger.warn('Socket authentication failed', {
-      error: err.message,
-      stack: err.stack,
-      name: err.name,
+    logger.warn('Socket connection rejected: invalid token', {
       socketId: socket.id,
+      err,
     })
     next(new Error(err.message))
   }

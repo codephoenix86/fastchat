@@ -1,21 +1,17 @@
 const { logger, env } = require('@config')
 const { StatusCodes } = require('http-status-codes')
 
-/**
- * Global error handling middleware
- */
 module.exports = (err, req, res, _next) => {
-  // Log error with context
-  logger.error(err.name, {
-    name: err.name,
-    code: err.code,
-    message: err.message,
-    stack: err.stack,
-    url: req.originalUrl,
-    method: req.method,
-    ip: req.ip,
-    userId: req.user?.id,
+  // Operational errors are expected domain errors — log at warn so they don't
+  // trigger on-call alerts. Unknown/programming errors are true failures — log at error.
+  const level = err.isOperational ? 'warn' : 'error'
+
+  logger[level]('Unhandled error', {
+    err,
     requestId: req.id,
+    userId: req.user?.id,
+    method: req.method,
+    url: req.originalUrl,
   })
 
   // Operational errors (expected errors we throw)

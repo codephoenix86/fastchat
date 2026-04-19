@@ -114,14 +114,16 @@ describe('S3 config — getClient', () => {
     it('sdkLogger.warn calls logger.warn with string content', () => {
       const sdkLogger = getSdkLogger()
       sdkLogger.warn('something went wrong')
-      expect(mockLogger.warn).toHaveBeenCalledWith('S3 client', { message: 'something went wrong' })
+      expect(mockLogger.warn).toHaveBeenCalledWith('S3 warning', {
+        message: 'something went wrong',
+      })
     })
 
     it('sdkLogger.warn calls logger.warn with object content directly', () => {
       const sdkLogger = getSdkLogger()
       const obj = { code: 'NetworkError', message: 'timeout' }
       sdkLogger.warn(obj)
-      expect(mockLogger.warn).toHaveBeenCalledWith('S3 client', obj)
+      expect(mockLogger.warn).toHaveBeenCalledWith('S3 warning', obj)
     })
 
     it('sdkLogger.error calls logger.error with structured error info', () => {
@@ -138,9 +140,7 @@ describe('S3 config — getClient', () => {
         expect.objectContaining({
           clientName: 'S3Client',
           commandName: 'PutObjectCommand',
-          error: err.message,
-          stack: err.stack,
-          name: err.name,
+          err,
         })
       )
     })
@@ -150,7 +150,7 @@ describe('S3 config — getClient', () => {
       expect(() => sdkLogger.error(null)).not.toThrow()
       expect(mockLogger.error).toHaveBeenCalledWith(
         'S3 request error',
-        expect.objectContaining({ error: undefined })
+        expect.objectContaining({ err: undefined })
       )
     })
 
@@ -159,7 +159,7 @@ describe('S3 config — getClient', () => {
       sdkLogger.error({ clientName: 'S3Client', commandName: 'GetObject' })
       expect(mockLogger.error).toHaveBeenCalledWith(
         'S3 request error',
-        expect.objectContaining({ clientName: 'S3Client', error: undefined })
+        expect.objectContaining({ clientName: 'S3Client', err: undefined })
       )
     })
 

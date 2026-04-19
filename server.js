@@ -40,32 +40,30 @@ const disconnectDatabases = (pool, client) =>
 
 const shutdown = async (signal, { server, io, pool, client }) => {
   if (isShuttingDown) {
-    logger.warn(`Shutdown already in progress. Ignoring ${signal}.`)
+    logger.warn('Shutdown already in progress', { signal })
     return
   }
   isShuttingDown = true
-  logger.info(`${signal} received. Starting graceful shutdown...`)
+  logger.info('Graceful shutdown initiated', { signal })
 
   const forceExit = setTimeout(() => {
-    logger.error('Graceful shutdown timeout exceeded. Forcing exit.')
+    logger.error('Graceful shutdown timed out — forcing exit', { timeoutMs: SHUTDOWN_TIMEOUT_MS })
     process.exit(1) // eslint-disable-line no-process-exit
   }, SHUTDOWN_TIMEOUT_MS)
   forceExit.unref()
 
   try {
-    logger.info('Closing WebSocket connections and HTTP server...')
     await closeServer(server, io)
-    logger.info('WebSocket connections and HTTP server closed.')
+    logger.info('HTTP server and WebSocket connections closed')
 
-    logger.info('Disconnecting databases...')
     await disconnectDatabases(pool, client)
-    logger.info('All databases disconnected.')
+    logger.info('Database connections closed')
 
     clearTimeout(forceExit)
-    logger.info('Graceful shutdown complete.')
+    logger.info('Shutdown complete')
     process.exit(0) // eslint-disable-line no-process-exit
   } catch (err) {
-    logger.error('Error during graceful shutdown', err)
+    logger.error('Error during graceful shutdown', { err })
     process.exit(1) // eslint-disable-line no-process-exit
   }
 }
@@ -80,20 +78,21 @@ const start = async () => {
   process.on('SIGINT', () => shutdown('SIGINT', context))
 
   process.on('uncaughtException', (err) => {
-    logger.error('Uncaught exception', err)
+    logger.error('Uncaught exception', { err })
     shutdown('uncaughtException', context).catch(() => process.exit(1)) // eslint-disable-line no-process-exit
   })
 
   process.on('unhandledRejection', (reason) => {
-    logger.error('Unhandled rejection', reason)
+    const err = reason instanceof Error ? reason : new Error(String(reason))
+    logger.error('Unhandled promise rejection', { err })
     shutdown('unhandledRejection', context).catch(() => process.exit(1)) // eslint-disable-line no-process-exit
   })
 
   await startListening(server)
-  logger.info(`Server listening on port ${env.PORT}`)
+  logger.info('Server started', { port: env.PORT, env: env.NODE_ENV })
 }
 
 start().catch((err) => {
-  logger.error('Startup failed', err)
+  logger.error('Startup failed', { err })
   process.exit(1) // eslint-disable-line no-process-exit
 })

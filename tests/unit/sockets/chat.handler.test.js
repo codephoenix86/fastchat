@@ -50,12 +50,9 @@ describe('chatHandler', () => {
       expect(socket.join).toHaveBeenCalledWith('chat-1')
     })
 
-    it('logs info with socketId, userId, and chatId', () => {
+    it('does not log on join', () => {
       socket._trigger(SOCKET_EVENTS.CHAT_JOIN, { chatId: 'chat-1' })
-      expect(mockLogger.info).toHaveBeenCalledWith(
-        'User joined chat',
-        expect.objectContaining({ socketId: socket.id, userId: socket.userId, chatId: 'chat-1' })
-      )
+      expect(mockLogger.info).not.toHaveBeenCalled()
     })
 
     it('handles different chatId values', () => {
@@ -75,12 +72,9 @@ describe('chatHandler', () => {
       expect(socket.leave).toHaveBeenCalledWith('chat-2')
     })
 
-    it('logs info with socketId, userId, and chatId', () => {
+    it('does not log on leave', () => {
       socket._trigger(SOCKET_EVENTS.CHAT_LEAVE, { chatId: 'chat-2' })
-      expect(mockLogger.info).toHaveBeenCalledWith(
-        'User left chat',
-        expect.objectContaining({ socketId: socket.id, userId: socket.userId, chatId: 'chat-2' })
-      )
+      expect(mockLogger.info).not.toHaveBeenCalled()
     })
 
     it('does not call join when leaving', () => {
