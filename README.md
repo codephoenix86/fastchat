@@ -175,6 +175,7 @@ npm run format:check              # Check formatting without writing
 | ------------------------------------------------ | --------------------------------------------------- |
 | [Quick Start Guide](docs/QUICKSTART.md)          | Local setup from clone to running server            |
 | [Architecture Overview](docs/ARCHITECTURE.md)    | System design, data flow, DB schemas, patterns      |
+| [Deployment Guide](docs/DEPLOYMENT.md)           | AWS EC2 setup, Docker, Nginx, SSL, common mistakes  |
 | [REST API Reference](docs/API_REST.md)           | All HTTP endpoints with request/response shapes     |
 | [WebSocket API Reference](docs/API_WEBSOCKET.md) | Socket.io events, presence, and client example      |
 | [Testing Guide](docs/TESTING.md)                 | Test strategy, environment setup, helpers, patterns |
@@ -183,7 +184,25 @@ npm run format:check              # Check formatting without writing
 
 ## Infrastructure
 
-The live deployment runs on AWS EC2 with:
+fastchat is deployed in two environments:
+
+### Render (always-on, free tier)
+
+**Live API:** `https://fastchat-u3tn.onrender.com` — verify with `GET /health`
+
+| Component  | Technology                   |
+| ---------- | ---------------------------- |
+| Server     | Render (Docker deployment)   |
+| Database   | Neon (PostgreSQL, free tier) |
+| Cache      | Upstash (Redis, free tier)   |
+| MongoDB    | MongoDB Atlas (free tier)    |
+| Containers | Docker                       |
+
+### AWS EC2 (kept offline to avoid charges)
+
+The EC2 deployment uses a self-managed stack on a t3.micro instance. It is spun up occasionally and may not be live at any given time.
+
+> `https://fastchat.duckdns.org` — may be offline to avoid AWS charges
 
 | Component      | Technology                            |
 | -------------- | ------------------------------------- |
@@ -193,6 +212,10 @@ The live deployment runs on AWS EC2 with:
 | Domain         | DuckDNS (`fastchat.duckdns.org`)      |
 | Containers     | Docker + Docker Compose               |
 | Image registry | Docker Hub (`nareshlohar86/fastchat`) |
+
+Full deployment writeup → **[Production Deployment](docs/DEPLOYMENT.md)**
+
+Behind-the-scenes story → **[How I Deployed My First Production App on AWS EC2 — Every Mistake I Made](https://dev.to/codephoenix86/how-i-deployed-my-first-production-app-on-aws-ec2-every-mistake-i-made-4e8e)**
 
 ---
 
