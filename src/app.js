@@ -81,6 +81,11 @@ app.use((req, res, next) => {
   next()
 })
 
+// API documentation page
+app.get('/', (req, res) => {
+  res.redirect(301, 'https://naresh-api-docs.vercel.app')
+})
+
 // All routes
 app.use(routes)
 
