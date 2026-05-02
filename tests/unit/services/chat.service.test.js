@@ -25,14 +25,14 @@ describe('ChatService', () => {
         participants: [userId1, userId2],
       })
       userRepository.contains.mockResolvedValue(true)
-      chatRepository.create.mockResolvedValue(mockChat)
+      chatRepository.upsertByChatKey.mockResolvedValue(mockChat)
 
       const result = await chatService.createChat(
         { participants: [userId2], type: CHAT_TYPES.PRIVATE },
         userId1
       )
 
-      expect(chatRepository.create).toHaveBeenCalled()
+      expect(chatRepository.upsertByChatKey).toHaveBeenCalled()
       expect(result.type).toBe(CHAT_TYPES.PRIVATE)
     })
 
@@ -62,40 +62,39 @@ describe('ChatService', () => {
       const userId1 = crypto.randomUUID()
       const userId2 = crypto.randomUUID()
       userRepository.contains.mockResolvedValue(true)
-      chatRepository.create.mockResolvedValue(createMockChat({ type: CHAT_TYPES.PRIVATE }))
+      chatRepository.upsertByChatKey.mockResolvedValue(createMockChat({ type: CHAT_TYPES.PRIVATE }))
 
       await chatService.createChat({ participants: [userId2], type: CHAT_TYPES.PRIVATE }, userId1)
 
-      expect(chatRepository.create).toHaveBeenCalledWith(
-        expect.objectContaining({ admin: undefined })
-      )
+      const insertDoc = chatRepository.upsertByChatKey.mock.calls[0][1]
+      expect(insertDoc.admin).toBeUndefined()
     })
 
     it('does not set groupName for private chats', async () => {
       const userId1 = crypto.randomUUID()
       const userId2 = crypto.randomUUID()
       userRepository.contains.mockResolvedValue(true)
-      chatRepository.create.mockResolvedValue(createMockChat({ type: CHAT_TYPES.PRIVATE }))
+      chatRepository.upsertByChatKey.mockResolvedValue(createMockChat({ type: CHAT_TYPES.PRIVATE }))
 
       await chatService.createChat(
         { participants: [userId2], type: CHAT_TYPES.PRIVATE, groupName: 'Should be ignored' },
         userId1
       )
 
-      expect(chatRepository.create).toHaveBeenCalledWith(
-        expect.objectContaining({ groupName: undefined })
-      )
+      const insertDoc = chatRepository.upsertByChatKey.mock.calls[0][1]
+      expect(insertDoc.groupName).toBeUndefined()
     })
 
     it('automatically adds creator to participants', async () => {
       const creatorId = crypto.randomUUID()
       const userId = crypto.randomUUID()
       userRepository.contains.mockResolvedValue(true)
-      chatRepository.create.mockResolvedValue(createMockChat())
+      chatRepository.upsertByChatKey.mockResolvedValue(createMockChat())
 
       await chatService.createChat({ participants: [userId], type: CHAT_TYPES.PRIVATE }, creatorId)
 
-      expect(chatRepository.create).toHaveBeenCalledWith(
+      expect(chatRepository.upsertByChatKey).toHaveBeenCalledWith(
+        expect.any(String),
         expect.objectContaining({
           participants: expect.arrayContaining([creatorId, userId]),
         })

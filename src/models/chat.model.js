@@ -21,6 +21,12 @@ const schema = new mongoose.Schema(
       trim: true,
     },
     groupPicture: String,
+    chatKey: {
+      type: String,
+      unique: true,
+      sparse: true,
+      index: true,
+    },
     participants: {
       type: [String],
       required: true,

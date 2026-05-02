@@ -3,6 +3,8 @@ const { CHAT_TYPES } = require('@constants')
 const { logger } = require('@config')
 const { NotFoundError, AuthorizationError, ConflictError, ValidationError } = require('@errors')
 
+const buildChatKey = (a, b) => [a, b].sort().join(':')
+
 class ChatService {
   async createChat(chatData, creatorId) {
     const { participants, type, groupName } = chatData
@@ -18,19 +20,49 @@ class ChatService {
       )
     }
 
-    // Set admin for group chats
-    const admin = type === CHAT_TYPES.GROUP ? creatorId : undefined
+    if (type === CHAT_TYPES.PRIVATE) {
+      const [a, b] = participants
+      const chatKey = buildChatKey(a, b)
+      const chat = await chatRepository.upsertByChatKey(chatKey, {
+        type: CHAT_TYPES.PRIVATE,
+        participants,
+        chatKey,
+      })
+      logger.info('Private chat ensured', { chatId: chat._id, creatorId })
+      return this.formatChat(chat)
+    }
 
+    // Group chat
     const chat = await chatRepository.create({
       type,
-      groupName: type === CHAT_TYPES.GROUP ? groupName : undefined,
-      admin,
+      groupName,
+      admin: creatorId,
       participants,
     })
 
     logger.info('Chat created', { chatId: chat._id, type, creatorId })
 
     return this.formatChat(chat)
+  }
+
+  async getOrCreatePrivateChat(senderId, peerId) {
+    if (senderId === peerId) {
+      throw new ValidationError('Cannot start a chat with yourself', 'INVALID_PEER')
+    }
+
+    const peerExists = await userRepository.contains([peerId])
+    if (!peerExists) {
+      throw new ValidationError('Peer user does not exist', 'USER_NOT_FOUND')
+    }
+
+    const chatKey = buildChatKey(senderId, peerId)
+    const chat = await chatRepository.upsertByChatKey(chatKey, {
+      type: CHAT_TYPES.PRIVATE,
+      participants: [senderId, peerId],
+      chatKey,
+    })
+
+    return chat
   }
 
   async getUserChats(userId, options = {}) {

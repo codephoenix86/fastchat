@@ -2,6 +2,7 @@ const { messageRepository, chatRepository } = require('@repositories')
 const { MESSAGE_STATUS } = require('@constants')
 const { logger } = require('@config')
 const { NotFoundError, AuthorizationError } = require('@errors')
+const chatService = require('./chat.service')
 
 class MessageService {
   async sendMessage(messageData, senderId) {
@@ -26,6 +27,22 @@ class MessageService {
     })
 
     return this.formatMessage(message)
+  }
+
+  async sendDirectMessage({ peerId, content }, senderId) {
+    const chat = await chatService.getOrCreatePrivateChat(senderId, peerId)
+
+    const message = await messageRepository.create({
+      content,
+      sender: senderId,
+      chat: chat._id,
+      status: MESSAGE_STATUS.SENT,
+    })
+
+    return {
+      chat: chatService.formatChat(chat),
+      message: this.formatMessage(message),
+    }
   }
 
   async getChatMessages(chatId, userId, options = {}) {

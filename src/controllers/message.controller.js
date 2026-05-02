@@ -65,3 +65,15 @@ exports.deleteMessage = async (req, res) => {
 
   res.status(StatusCodes.OK).json(new ApiResponse('Message deleted successfully'))
 }
+
+exports.sendDirectMessage = async (req, res) => {
+  const { peerId, content } = req.body
+
+  const { chat, message } = await messageService.sendDirectMessage({ peerId, content }, req.user.id)
+
+  io.to(chat.id).emit(SOCKET_EVENTS.MESSAGE_NEW, message)
+
+  res
+    .status(StatusCodes.CREATED)
+    .json(new ApiResponse('Message sent successfully', { chat, message }, StatusCodes.CREATED))
+}

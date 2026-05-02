@@ -38,6 +38,18 @@ class ChatRepository {
   exists(query) {
     return Chat.exists(query)
   }
+
+  findOne(query) {
+    return Chat.findOne(query)
+  }
+
+  upsertByChatKey(chatKey, insertDoc) {
+    return Chat.findOneAndUpdate(
+      { chatKey },
+      { $setOnInsert: insertDoc },
+      { upsert: true, new: true, setDefaultsOnInsert: true }
+    )
+  }
 }
 
 module.exports = new ChatRepository()
