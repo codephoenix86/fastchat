@@ -28,6 +28,10 @@ README.md
 LICENSE
 *.md
 
+# Kubernetes and Deployment
+k8s/
+helm/
+
 # Data & Migrations
 uploads
 

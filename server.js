@@ -50,7 +50,6 @@ const shutdown = async (signal, { server, io, pool, client }) => {
     logger.error('Graceful shutdown timed out — forcing exit', { timeoutMs: SHUTDOWN_TIMEOUT_MS })
     process.exit(1) // eslint-disable-line no-process-exit
   }, SHUTDOWN_TIMEOUT_MS)
-  forceExit.unref()
 
   try {
     await closeServer(server, io)
