@@ -325,15 +325,31 @@ describe('userRepository', () => {
   describe('create', () => {
     it('inserts user and profile, returns user row', async () => {
       const row = makeUserRow({ email: 'new@example.com', username: 'newuser' })
-      pool.query
-        .mockResolvedValueOnce({ rows: [row] }) // users insert
-        .mockResolvedValueOnce({ rows: [] }) // profiles insert
+
+      const mockClientQuery = jest
+        .fn()
+        .mockResolvedValueOnce({})
+        .mockResolvedValueOnce({ rows: [row] })
+        .mockResolvedValueOnce({ rows: [] })
+        .mockResolvedValueOnce({})
+
+      const mockClientRelease = jest.fn()
+
+      pool.connect.mockResolvedValueOnce({
+        query: mockClientQuery,
+        release: mockClientRelease,
+      })
       const result = await userRepository.create({
         email: 'new@example.com',
         username: 'newuser',
         password_hash: 'hashed',
       })
-      expect(pool.query).toHaveBeenCalledTimes(2)
+      expect(mockClientQuery).toHaveBeenCalledTimes(4)
+
+      expect(mockClientQuery).toHaveBeenNthCalledWith(1, 'BEGIN')
+      expect(mockClientQuery).toHaveBeenNthCalledWith(4, 'COMMIT')
+
+      expect(mockClientRelease).toHaveBeenCalledTimes(1)
       expect(result).toEqual(row)
     })
 
@@ -342,10 +358,30 @@ describe('userRepository', () => {
         code: '23505',
         constraint: 'users_email_key',
       })
-      pool.query.mockRejectedValueOnce(err)
+
+      const mockClientQuery = jest
+        .fn()
+        .mockResolvedValueOnce({})
+        .mockRejectedValueOnce(err)
+        .mockResolvedValueOnce({})
+
+      const mockClientRelease = jest.fn()
+
+      pool.connect.mockResolvedValueOnce({
+        query: mockClientQuery,
+        release: mockClientRelease,
+      })
+
       await expect(
         userRepository.create({ email: 'a@b.com', username: 'u', password_hash: 'h' })
       ).rejects.toThrow(ConflictError)
+
+      expect(mockClientQuery).toHaveBeenCalledTimes(3)
+
+      expect(mockClientQuery).toHaveBeenNthCalledWith(1, 'BEGIN')
+      expect(mockClientQuery).toHaveBeenNthCalledWith(3, 'ROLLBACK')
+
+      expect(mockClientRelease).toHaveBeenCalledTimes(1)
     })
 
     it('maps a duplicate username constraint violation to ConflictError', async () => {
@@ -353,17 +389,58 @@ describe('userRepository', () => {
         code: '23505',
         constraint: 'users_username_key',
       })
-      pool.query.mockRejectedValueOnce(err)
+
+      const mockClientQuery = jest
+        .fn()
+        .mockResolvedValueOnce({})
+        .mockRejectedValueOnce(err)
+        .mockResolvedValueOnce({})
+
+      const mockClientRelease = jest.fn()
+
+      pool.connect.mockResolvedValueOnce({
+        query: mockClientQuery,
+        release: mockClientRelease,
+      })
+
       await expect(
         userRepository.create({ email: 'b@b.com', username: 'taken', password_hash: 'h' })
       ).rejects.toThrow(ConflictError)
+
+      expect(mockClientQuery).toHaveBeenCalledTimes(3)
+
+      expect(mockClientQuery).toHaveBeenNthCalledWith(1, 'BEGIN')
+      expect(mockClientQuery).toHaveBeenNthCalledWith(3, 'ROLLBACK')
+
+      expect(mockClientRelease).toHaveBeenCalledTimes(1)
     })
 
     it('re-throws unknown database errors', async () => {
-      pool.query.mockRejectedValueOnce(new Error('unexpected db error'))
+      const err = new Error('unexpected db error')
+
+      const mockClientQuery = jest
+        .fn()
+        .mockResolvedValueOnce({})
+        .mockRejectedValueOnce(err)
+        .mockResolvedValueOnce({})
+
+      const mockClientRelease = jest.fn()
+
+      pool.connect.mockResolvedValueOnce({
+        query: mockClientQuery,
+        release: mockClientRelease,
+      })
+
       await expect(
         userRepository.create({ email: 'c@c.com', username: 'u2', password_hash: 'h' })
       ).rejects.toThrow('unexpected db error')
+
+      expect(mockClientQuery).toHaveBeenCalledTimes(3)
+
+      expect(mockClientQuery).toHaveBeenNthCalledWith(1, 'BEGIN')
+      expect(mockClientQuery).toHaveBeenNthCalledWith(3, 'ROLLBACK')
+
+      expect(mockClientRelease).toHaveBeenCalledTimes(1)
     })
   })
 

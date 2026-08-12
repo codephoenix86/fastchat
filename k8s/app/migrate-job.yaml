@@ -1,0 +1,20 @@
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: fastchat-migrate
+spec:
+  ttlSecondsAfterFinished: 300
+  backoffLimit: 2
+  template:
+    spec:
+      restartPolicy: OnFailure
+      containers:
+      - name: migrate
+        image: nareshlohar86/fastchat:latest
+        command: ["sh", "-c", "DATABASE_URL=\"$POSTGRES_URI\" npm run migrate:up"]
+        env:
+        - name: POSTGRES_URI
+          valueFrom:
+            secretKeyRef:
+              name: fastchat-secret
+              key: POSTGRES_URI

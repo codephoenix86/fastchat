@@ -59,14 +59,18 @@ class UserRepository {
 
   async create(userData) {
     const { email, username, password_hash } = userData
+    const client = await pool.connect()
     const userStatement =
       'INSERT INTO users(email, username, password_hash) VALUES($1,$2,$3) RETURNING *'
     const profileStatement = 'INSERT INTO profiles(user_id) VALUES ($1)'
     try {
-      const result = await pool.query(userStatement, [email, username, password_hash])
-      await pool.query(profileStatement, [result.rows[0].id])
+      await client.query('BEGIN')
+      const result = await client.query(userStatement, [email, username, password_hash])
+      await client.query(profileStatement, [result.rows[0].id])
+      await client.query('COMMIT')
       return result.rows[0]
     } catch (err) {
+      await client.query('ROLLBACK')
       if (err.code === '23505') {
         if (err.constraint.includes('email')) {
           throw new ConflictError('Email already exists', 'EMAIL_ALREADY_EXISTS')
@@ -76,6 +80,8 @@ class UserRepository {
         }
       }
       throw err
+    } finally {
+      client.release()
     }
   }
   async findByEmailOrUsername(identifier) {

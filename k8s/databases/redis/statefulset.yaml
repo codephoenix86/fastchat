@@ -1,0 +1,35 @@
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  name: redis-statefulset
+spec:
+  serviceName: "redis-service"
+  replicas: 1
+  selector:
+    matchLabels:
+      app: fastchat-redis
+      db: redis
+  template:
+    metadata:
+      labels:
+        app: fastchat-redis
+        db: redis
+    spec:
+      containers:
+      - name: redis-container
+        image: redis:7.2-alpine
+        envFrom:
+        - secretRef:
+            name: redis-secret
+        volumeMounts:
+        - name: data-volume
+          mountPath: /data
+  volumeClaimTemplates:
+  - metadata:
+      name: data-volume
+    spec:
+      accessModes: ["ReadWriteOnce"]
+      storageClassName: "standard"
+      resources:
+        requests:
+          storage: 1Gi

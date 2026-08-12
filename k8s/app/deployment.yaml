@@ -1,0 +1,38 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: fastchat-deployment
+  labels:
+    app: fastchat
+spec:
+  replicas: 2
+  selector:
+    matchLabels:
+      app: fastchat-api
+  template:
+    metadata:
+      labels:
+        app: fastchat-api
+    spec:
+      containers:
+      - name: fastchat-container
+        image: nareshlohar86/fastchat:latest
+        envFrom:
+        - configMapRef:
+            name: fastchat-config
+        - secretRef:
+            name: fastchat-secret
+        livenessProbe:
+          httpGet:
+           path: /health
+           port: 3000
+          initialDelaySeconds: 3
+          periodSeconds: 3
+        resources:
+          requests:
+            memory: "256Mi"
+            cpu: "250m"
+          limits:
+            memory: "256Mi"
+            cpu: "250m"
+        

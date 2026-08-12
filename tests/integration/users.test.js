@@ -141,7 +141,6 @@ describe('Users API', () => {
       expectSuccess(response, StatusCodes.OK, 'User fetched successfully')
       expect(response.body.data.user.id).toBe(user.id)
       expect(response.body.data.user.username).toBe(user.username)
-      expect(response.body.data.user.email).toBe(user.email)
       expect(response.body.data.user.password).toBeUndefined()
     })
 

@@ -1,0 +1,31 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: postgres-deployment
+  labels:
+    app: fastchat
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: fastchat-postgres
+      db: postgres
+  template:
+    metadata:
+      labels:
+        app: fastchat-postgres
+        db: postgres
+    spec:
+      containers:
+      - name: postgres-container
+        image: postgres:16-alpine
+        envFrom:
+        - secretRef:
+            name: postgres-secret
+        resources:
+          requests:
+            memory: "512Mi"
+            cpu: "500m"
+          limits:
+            memory: "512Mi"
+            cpu: "500m"

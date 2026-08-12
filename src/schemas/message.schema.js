@@ -1,5 +1,5 @@
 const Joi = require('joi')
-const { paramUuid } = require('./common.schema')
+const { paramUuid, requiredBody } = require('./common.schema')
 
 const contentSchema = Joi.string().trim().max(5000).required().messages({
   'any.required': 'Message content is required',
@@ -53,19 +53,15 @@ const deleteMessage = Joi.object({
 })
 
 const sendDirectMessage = Joi.object({
-  body: Joi.object({
-    peerId: Joi.string().uuid().required().messages({
-      'any.required': 'peerId is required',
-      'string.guid': 'Invalid peerId format. Must be a valid UUID.',
-    }),
-    content: contentSchema,
-  })
-    .required()
-    .min(1)
-    .messages({
-      'any.required': 'Request body is missing.',
-      'object.min': 'Request body cannot be empty.',
-    }),
+  body: requiredBody(
+    Joi.object({
+      peerId: Joi.string().uuid().required().messages({
+        'any.required': 'peerId is required',
+        'string.guid': 'Invalid peerId format. Must be a valid UUID.',
+      }),
+      content: contentSchema,
+    })
+  ),
 })
 
 module.exports = { sendMessage, updateMessage, getMessageById, deleteMessage, sendDirectMessage }

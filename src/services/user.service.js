@@ -43,7 +43,12 @@ class UserService {
     if (!user) {
       throw new NotFoundError('User not found')
     }
-    return this.formatUser(user)
+    return {
+      id: user.id,
+      username: user.username,
+      bio: user.bio || undefined,
+      lastSeen: user.last_seen,
+    }
   }
 
   /**

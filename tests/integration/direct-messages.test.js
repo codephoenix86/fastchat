@@ -7,7 +7,7 @@ const { createTestUsers, expectError, expectSuccess } = require('./helpers')
 const { Chat } = require('@models')
 const { CHAT_TYPES } = require('@constants')
 
-describe('POST /api/v1/messages/direct', () => {
+describe('POST /api/v1/messages', () => {
   beforeAll(async () => {
     await connectTestDB()
   })
@@ -27,7 +27,7 @@ describe('POST /api/v1/messages/direct', () => {
     expect(chatsBefore).toBe(0)
 
     const response = await request(app)
-      .post('/api/v1/messages/direct')
+      .post('/api/v1/messages')
       .set('Authorization', `Bearer ${alice.tokens.accessToken}`)
       .send({ peerId: bob.user.id, content: 'Hey Bob!' })
 
@@ -47,7 +47,7 @@ describe('POST /api/v1/messages/direct', () => {
     const [alice, bob] = await createTestUsers(2)
 
     const first = await request(app)
-      .post('/api/v1/messages/direct')
+      .post('/api/v1/messages')
       .set('Authorization', `Bearer ${alice.tokens.accessToken}`)
       .send({ peerId: bob.user.id, content: 'first' })
     expectSuccess(first, StatusCodes.CREATED)
@@ -55,7 +55,7 @@ describe('POST /api/v1/messages/direct', () => {
 
     // Bob replies via direct endpoint — should land in the same chat
     const second = await request(app)
-      .post('/api/v1/messages/direct')
+      .post('/api/v1/messages')
       .set('Authorization', `Bearer ${bob.tokens.accessToken}`)
       .send({ peerId: alice.user.id, content: 'second' })
     expectSuccess(second, StatusCodes.CREATED)
@@ -63,7 +63,7 @@ describe('POST /api/v1/messages/direct', () => {
 
     // Alice sends again
     const third = await request(app)
-      .post('/api/v1/messages/direct')
+      .post('/api/v1/messages')
       .set('Authorization', `Bearer ${alice.tokens.accessToken}`)
       .send({ peerId: bob.user.id, content: 'third' })
     expectSuccess(third, StatusCodes.CREATED)
@@ -77,11 +77,11 @@ describe('POST /api/v1/messages/direct', () => {
 
     const [resA, resB] = await Promise.all([
       request(app)
-        .post('/api/v1/messages/direct')
+        .post('/api/v1/messages')
         .set('Authorization', `Bearer ${alice.tokens.accessToken}`)
         .send({ peerId: bob.user.id, content: 'from alice' }),
       request(app)
-        .post('/api/v1/messages/direct')
+        .post('/api/v1/messages')
         .set('Authorization', `Bearer ${bob.tokens.accessToken}`)
         .send({ peerId: alice.user.id, content: 'from bob' }),
     ])
@@ -103,7 +103,7 @@ describe('POST /api/v1/messages/direct', () => {
     const existingChatId = created.body.data.chat.id
 
     const direct = await request(app)
-      .post('/api/v1/messages/direct')
+      .post('/api/v1/messages')
       .set('Authorization', `Bearer ${alice.tokens.accessToken}`)
       .send({ peerId: bob.user.id, content: 'hi' })
     expectSuccess(direct, StatusCodes.CREATED)
@@ -115,7 +115,7 @@ describe('POST /api/v1/messages/direct', () => {
     const [alice] = await createTestUsers(1)
 
     const response = await request(app)
-      .post('/api/v1/messages/direct')
+      .post('/api/v1/messages')
       .set('Authorization', `Bearer ${alice.tokens.accessToken}`)
       .send({ peerId: alice.user.id, content: 'hi me' })
 
@@ -126,7 +126,7 @@ describe('POST /api/v1/messages/direct', () => {
     const [alice] = await createTestUsers(1)
 
     const response = await request(app)
-      .post('/api/v1/messages/direct')
+      .post('/api/v1/messages')
       .set('Authorization', `Bearer ${alice.tokens.accessToken}`)
       .send({ peerId: crypto.randomUUID(), content: 'hi ghost' })
 
@@ -137,7 +137,7 @@ describe('POST /api/v1/messages/direct', () => {
     const [alice] = await createTestUsers(1)
 
     const response = await request(app)
-      .post('/api/v1/messages/direct')
+      .post('/api/v1/messages')
       .set('Authorization', `Bearer ${alice.tokens.accessToken}`)
       .send({ peerId: 'not-a-uuid', content: 'hi' })
 
@@ -148,7 +148,7 @@ describe('POST /api/v1/messages/direct', () => {
     const [alice, bob] = await createTestUsers(2)
 
     const response = await request(app)
-      .post('/api/v1/messages/direct')
+      .post('/api/v1/messages')
       .set('Authorization', `Bearer ${alice.tokens.accessToken}`)
       .send({ peerId: bob.user.id, content: '' })
 
@@ -156,10 +156,10 @@ describe('POST /api/v1/messages/direct', () => {
   })
 
   it('requires authentication', async () => {
-    const [, bob] = await createTestUsers(2)
+    const [_, bob] = await createTestUsers(2)
 
     const response = await request(app)
-      .post('/api/v1/messages/direct')
+      .post('/api/v1/messages')
       .send({ peerId: bob.user.id, content: 'hi' })
 
     expectError(response, StatusCodes.UNAUTHORIZED)

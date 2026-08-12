@@ -1,0 +1,36 @@
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  name: mongodb-statefulset
+spec:
+  serviceName: "mongodb-service"
+  replicas: 1
+  selector:
+    matchLabels:
+      app: fastchat-mongodb
+      db: mongodb
+  template:
+    metadata:
+      labels:
+        app: fastchat-mongodb
+        db: mongodb
+    spec:
+      containers:
+      - name: mongodb-container
+        image: mongo:7.0
+        envFrom:
+        - secretRef:
+            name: mongodb-secret
+        volumeMounts:
+        - name: data-volume
+          mountPath: /data/db
+  volumeClaimTemplates:
+  - metadata:
+      name: data-volume
+    spec:
+      accessModes: ["ReadWriteOnce"]
+      storageClassName: "standard"
+      resources:
+        requests:
+          storage: 1Gi
+    

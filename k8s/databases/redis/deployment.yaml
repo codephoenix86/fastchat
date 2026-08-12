@@ -1,0 +1,37 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: redis-deployment
+  labels:
+    app: fastchat
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: fastchat-redis
+      db: redis
+  template:
+    metadata:
+      labels:
+        app: fastchat-redis
+        db: redis
+    spec:
+      containers:
+      - name: redis-container
+        image: redis:7.2-alpine
+        envFrom:
+        - secretRef:
+            name: redis-secret
+        resources:
+          requests:
+            memory: "512Mi"
+            cpu: "500m"
+          limits:
+            memory: "512Mi"
+            cpu: "500m"
+        args:
+        - redis-server
+        - --appendonly
+        - "yes"
+        - --requirepass
+        - $(REDIS_PASSWORD)
