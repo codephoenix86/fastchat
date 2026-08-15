@@ -10,7 +10,7 @@ class AuthService {
   async signup(userData) {
     const { email, username, password } = userData
     const password_hash = await bcrypt.hash(password, 10)
-    const user = await userService.createUser({ email, username, password_hash })
+    const user = await userService.create({ email, username, password_hash })
 
     logger.info('User registered', { userId: user.id })
 
@@ -23,7 +23,7 @@ class AuthService {
   }
 
   async authenticate(identifier, password) {
-    const user = await userService.getUserByIdentifier(identifier)
+    const user = await userService.findByIdentifier(identifier, true)
     if (!user) {
       // Log without identifier to avoid leaking PII/usernames in logs.
       logger.warn('Login failed: user not found')
@@ -64,7 +64,7 @@ class AuthService {
   async refreshSession(refreshToken) {
     const userId = await tokenService.getUserId(refreshToken)
 
-    const user = await userService.findUserById(userId)
+    const user = await userService.findById(userId)
 
     const tokens = await tokenService.rotateTokens(refreshToken, user)
 

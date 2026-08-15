@@ -5,85 +5,64 @@ const { logger } = require('@config')
 const { NotFoundError, AuthenticationError } = require('@errors')
 
 class UserService {
-  /**
-   * Create a new user
-   */
-  async createUser(userData) {
+  async create(userData) {
     const user = await userRepository.create(userData)
-    return this.formatUser(user)
-  }
-  async getUserByIdentifier(identifier) {
-    const user = await userRepository.findByEmailOrUsername(identifier)
     return user
   }
-  /**
-   * Find all users with pagination, filtering, and sorting
-   * @param {Object} options - { filter, skip, limit, sort, search }
-   */
-  async findAllUsers(options = {}) {
-    const { filter = {}, skip = 0, limit = 20, sort = { createdAt: -1 }, search } = options
 
-    // Get total count for pagination
-    const total = await userRepository.countDocuments(filter, search)
+  async existAll(userIds) {
+    const isAllUsersExist = await userRepository.existAll(userIds)
+    return isAllUsersExist
+  }
 
-    // Get users with pagination
-    const users = await userRepository.findAll(search, filter, { skip, limit, sort })
+  async findByIdentifier(identifier) {
+    const user = await userRepository.findByEmailOrUsername(identifier, true)
+    return user
+  }
+
+  async findAll(options = {}) {
+    const { skip = 0, limit = 20 } = options
+
+    const users = await userRepository.findAll({ skip, limit })
 
     return {
-      users: users.map((user) => this.formatUser(user)),
-      total,
+      users,
+      total: users.length,
     }
   }
 
-  /**
-   * Find user by ID
-   */
-  async findUserById(userId) {
+  async findById(userId) {
     const user = await userRepository.findById(userId)
     if (!user) {
       throw new NotFoundError('User not found')
     }
-    return {
-      id: user.id,
-      username: user.username,
-      bio: user.bio || undefined,
-      lastSeen: user.last_seen,
-    }
+    return user
   }
 
-  /**
-   * Update user
-   */
-  async updateUser(userId, updateData) {
+  async updateById(userId, updateData) {
     const user = await userRepository.findById(userId)
     if (!user) {
       throw new NotFoundError('User not found')
     }
     const updatedUser = await userRepository.updateById(userId, updateData)
-    return this.formatUser(updatedUser)
+    return updatedUser
   }
 
-  /**
-   * Delete user account
-   */
-  async deleteUser(userId) {
+  async deleteById(userId) {
     const user = await userRepository.findById(userId)
     if (!user) {
       throw new NotFoundError('User not found')
     }
-
-    // Delete user's avatar if exists
     if (user.avatar) {
       try {
         await s3Service.deleteFile(user.avatar)
       } catch (err) {
-        // Non-fatal: proceed with account deletion even if S3 cleanup fails.
         logger.warn('Failed to delete avatar during user deletion', { userId, err })
       }
     }
 
-    const deleted = await userRepository.findByIdAndDelete(userId)
-    return this.formatUser(deleted)
+    const deletedUser = await userRepository.deleteById(userId)
+    return deletedUser
   }
 
   async deleteAvatar(userId) {
@@ -99,13 +78,10 @@ class UserService {
         throw err
       }
     }
-    const updated = await userRepository.deleteAvatar(userId)
-    return this.formatUser(updated)
+    const updatedUser = await userRepository.deleteAvatar(userId)
+    return updatedUser
   }
 
-  /**
-   * Update user avatar
-   */
   async updateAvatar(userId, file) {
     const user = await userRepository.findById(userId)
     if (!user) {
@@ -125,18 +101,15 @@ class UserService {
     try {
       const url = await s3Service.uploadFile(file.buffer, filename, file.mimetype)
       const updated = await userRepository.updateById(userId, { avatar: url })
-      return this.formatUser(updated)
+      return updated
     } catch (err) {
       logger.warn('Failed to upload avatar', { userId, err })
       throw err
     }
   }
 
-  /**
-   * Change user password
-   */
   async changePassword(userId, currentPassword, newPassword) {
-    const user = await userRepository.findByIdWithPassword(userId)
+    const user = await userRepository.findById(userId, true)
     if (!user) {
       throw new NotFoundError('User not found')
     }
@@ -151,27 +124,6 @@ class UserService {
     await userRepository.updateById(userId, { password_hash })
 
     logger.info('Password changed', { userId })
-  }
-
-  /**
-   * Format user object for API response
-   */
-  formatUser(user) {
-    if (!user) {
-      return null
-    }
-
-    return {
-      id: user.id,
-      username: user.username,
-      email: user.email,
-      role: user.role,
-      avatar: user.avatar || undefined,
-      bio: user.bio || undefined,
-      lastSeen: user.last_seen || undefined,
-      createdAt: user.created_at,
-      updatedAt: user.updated_at || undefined,
-    }
   }
 }
 

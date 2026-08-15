@@ -1,312 +1,308 @@
-const { USER_ROLES } = require('@constants')
+const { PrismaClient, Prisma } = require('@prisma/client')
+const { PrismaPg } = require('@prisma/adapter-pg')
 const { postgres } = require('@config')
-const { ConflictError, ValidationError } = require('@errors')
+const { ConflictError } = require('@errors')
+
 const pool = postgres.getPool()
+const adapter = new PrismaPg(pool)
+
+const prisma = new PrismaClient({ adapter })
+
 class UserRepository {
-  _isUuid(value) {
-    if (typeof value !== 'string') {
-      return false
-    }
-    return /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(value)
-  }
-
-  _assertUuid(value, field = 'id') {
-    if (!this._isUuid(value)) {
-      throw new ValidationError(`Invalid ${field} format. Must be a valid UUID.`, 'INVALID_UUID')
-    }
-  }
-
-  _assertUuidArray(values, field = 'id') {
-    if (!Array.isArray(values)) {
-      throw new ValidationError(`${field} must be an array`, 'BAD_REQUEST')
-    }
-    values.forEach((v) => this._assertUuid(v, field))
-  }
-
-  _normalizeUserFilters(filters) {
-    const allowed = new Set(['id', 'username', 'email', 'role'])
-    const safe = {}
-    if (!filters || typeof filters !== 'object') {
-      return safe
-    }
-
-    Object.entries(filters).forEach(([key, value]) => {
-      if (!allowed.has(key)) {
-        return
-      }
-      if (value === undefined) {
-        return
-      }
-      safe[key] = value
-    })
-
-    this._validateSensitiveFilterFields(safe)
-
-    return safe
-  }
-
-  _validateSensitiveFilterFields(safe) {
-    if (safe.id !== undefined && safe.id !== null && safe.id !== '') {
-      this._assertUuid(String(safe.id), 'id')
-    }
-    if (safe.role !== undefined && safe.role !== null && safe.role !== '') {
-      const allowedRoles = new Set(Object.values(USER_ROLES))
-      if (!allowedRoles.has(safe.role)) {
-        throw new ValidationError('Invalid role filter', 'INVALID_ROLE')
-      }
-    }
-  }
-
   async create(userData) {
     const { email, username, password_hash } = userData
-    const client = await pool.connect()
-    const userStatement =
-      'INSERT INTO users(email, username, password_hash) VALUES($1,$2,$3) RETURNING *'
-    const profileStatement = 'INSERT INTO profiles(user_id) VALUES ($1)'
     try {
-      await client.query('BEGIN')
-      const result = await client.query(userStatement, [email, username, password_hash])
-      await client.query(profileStatement, [result.rows[0].id])
-      await client.query('COMMIT')
-      return result.rows[0]
+      const user = await prisma.user.create({
+        data: {
+          email,
+          username,
+          password_hash,
+          profile: {
+            create: {},
+          },
+        },
+      })
+      return {
+        id: user.id,
+        username: user.username,
+        email: user.email,
+      }
     } catch (err) {
-      await client.query('ROLLBACK')
-      if (err.code === '23505') {
-        if (err.constraint.includes('email')) {
-          throw new ConflictError('Email already exists', 'EMAIL_ALREADY_EXISTS')
-        }
-        if (err.constraint.includes('username')) {
-          throw new ConflictError('Username already taken', 'USERNAME_ALREADY_TAKEN')
+      if (err instanceof Prisma.PrismaClientKnownRequestError) {
+        // P2002 is Prisma's universal code for "Unique constraint failed"
+        if (err.code === 'P2002') {
+          const target = err.meta?.driverAdapterError?.cause?.originalMessage || ''
+          if (target.includes('users_email_key')) {
+            throw new ConflictError('Email already exists', 'EMAIL_ALREADY_EXISTS')
+          }
+          if (target.includes('users_username_key')) {
+            throw new ConflictError('Username already taken', 'USERNAME_ALREADY_TAKEN')
+          }
         }
       }
       throw err
-    } finally {
-      client.release()
     }
   }
-  async findByEmailOrUsername(identifier) {
-    const statement =
-      'SELECT id, username, email, role, password_hash FROM users WHERE email = $1 OR username = $1'
-    const result = await pool.query(statement, [identifier])
-    return result.rows[0] || null
-  }
-  async findById(userId) {
-    this._assertUuid(userId, 'userId')
-    const statement =
-      'SELECT users.id, users.username, users.email, users.role, profiles.bio, profiles.avatar, profiles.last_seen, users.created_at, profiles.updated_at FROM users LEFT JOIN profiles ON users.id = profiles.user_id WHERE users.id = $1'
-    const result = await pool.query(statement, [userId])
-    return result.rows[0] || null
-  }
 
-  async findByIdWithPassword(userId) {
-    this._assertUuid(userId, 'userId')
-    const statement =
-      'SELECT users.id, users.username, users.email, users.password_hash, users.role, profiles.bio, profiles.avatar, profiles.last_seen, users.created_at, profiles.updated_at FROM users LEFT JOIN profiles ON users.id = profiles.user_id WHERE users.id = $1'
-    const result = await pool.query(statement, [userId])
-    return result.rows[0] || null
-  }
-
-  async findOneWithPassword(query) {
-    const statement =
-      'SELECT id, username, email, password_hash, role FROM users WHERE username = $1 OR email = $1'
-    const value = query.username || query.email
-    const result = await pool.query(statement, [value])
-    return result.rows[0]
-  }
-
-  _normalizeSortForUserList(sort) {
-    const allowed = new Set(['username', 'email', 'created_at'])
-    const toSqlColumn = (key) => (key === 'createdAt' ? 'created_at' : key)
-
-    let pairs = []
-    if (Array.isArray(sort)) {
-      pairs = sort.map(([field, direction]) => [toSqlColumn(field), direction])
-    } else if (sort && typeof sort === 'object') {
-      pairs = Object.entries(sort).map(([field, direction]) => [toSqlColumn(field), direction])
-    }
-
-    pairs = pairs.filter(([field]) => allowed.has(field))
-    if (pairs.length === 0) {
-      pairs = [['created_at', -1]]
-    }
-    return pairs
-  }
-
-  async findAll(query, filters, options = {}) {
-    const { skip = 0, limit = 20, sort } = options
-    const safeSkip = Number.isFinite(+skip) ? Math.max(0, parseInt(skip, 10)) : 0
-    const safeLimit = Number.isFinite(+limit) ? Math.min(100, Math.max(1, parseInt(limit, 10))) : 20
-    const conditions = []
-    const params = []
-
-    const safeFilters = this._normalizeUserFilters(filters)
-    Object.entries(safeFilters).forEach(([key, value]) => {
-      params.push(value)
-      conditions.push(`users.${key} = $${params.length}`)
+  async existAll(userIds) {
+    const usersCount = await prisma.user.count({
+      where: {
+        id: {
+          in: userIds,
+        },
+      },
     })
-
-    if (query) {
-      params.push(query)
-      conditions.push(`(users.username ~* $${params.length} OR users.email ~* $${params.length})`)
-    }
-
-    const sortPairs = this._normalizeSortForUserList(sort)
-    const sortings = []
-    sortPairs.forEach(([key, value]) => {
-      sortings.push(`users.${key} ${value === 1 ? 'ASC' : 'DESC'}`)
-    })
-
-    const whereClause = conditions.length > 0 ? `WHERE ${conditions.join(' AND ')}` : ''
-    const sortClause = sortings.length > 0 ? `ORDER BY ${sortings.join(', ')}` : ''
-    const statement = `SELECT users.id, users.username, users.email, users.password_hash, users.role, profiles.bio, profiles.avatar, profiles.last_seen, users.created_at, profiles.updated_at FROM users LEFT JOIN profiles ON users.id = profiles.user_id ${whereClause} ${sortClause} LIMIT $${params.length + 1} OFFSET $${params.length + 2}`
-
-    params.push(safeLimit, safeSkip)
-    const result = await pool.query(statement, params)
-    return result.rows
+    const allUsersExists = userIds.length === usersCount
+    return allUsersExists
   }
 
-  async contains(arr) {
-    if (!arr || arr.length === 0) {
-      return true
-    }
-
-    this._assertUuidArray(arr, 'userId')
-    const placeholders = arr.map((_, i) => `$${i + 1}`).join(', ')
-    const statement = `SELECT COUNT(*) FROM users WHERE id IN (${placeholders})`
-    const result = await pool.query(statement, arr)
-    return parseInt(result.rows[0].count, 10) === arr.length
-  }
-  async countDocuments(filters, query) {
-    const conditions = []
-    const params = []
-
-    const safeFilters = this._normalizeUserFilters(filters)
-    Object.entries(safeFilters).forEach(([key, value]) => {
-      params.push(value)
-      conditions.push(`users.${key} = $${params.length}`)
+  async findByEmailOrUsername(identifier, isIncludePassword = false) {
+    // findFirst returns the first match, or null if nothing is found
+    const user = await prisma.user.findFirst({
+      where: {
+        OR: [{ email: identifier }, { username: identifier }],
+      },
+      select: {
+        id: true,
+        username: true,
+        ...(isIncludePassword && { password_hash: true }),
+        profile: {
+          select: {
+            bio: true,
+            avatar: true,
+            last_seen: true,
+          },
+        },
+      },
     })
-
-    if (query) {
-      params.push(query)
-      conditions.push(`(users.username ~* $${params.length} OR users.email ~* $${params.length})`)
+    if (!user) {
+      return null
     }
-    const whereClause = conditions.length > 0 ? `WHERE ${conditions.join(' AND ')}` : ''
-    const statement = `SELECT COUNT(*) FROM users ${whereClause}`
-    const result = await pool.query(statement, params)
-    return parseInt(result.rows[0].count)
+    return {
+      id: user.id,
+      username: user.username || undefined,
+      email: user.email || undefined,
+      password_hash: user.password_hash || undefined,
+      bio: user.profile.bio || undefined,
+      avatar: user.profile.avatar || undefined,
+      lastSeen: user.profile.last_seen || undefined,
+    }
+  }
+  async findById(userId, isIncludePassword = false) {
+    // findUnique is highly optimized for searching by primary keys (@id)
+    const user = await prisma.user.findUnique({
+      where: {
+        id: userId,
+      },
+      select: {
+        id: true,
+        username: true,
+        ...(isIncludePassword && { password_hash: true }),
+        profile: {
+          select: {
+            bio: true,
+            avatar: true,
+            last_seen: true,
+          },
+        },
+      },
+    })
+    if (!user) {
+      return null
+    }
+    return {
+      id: user.id,
+      username: user.username || undefined,
+      email: user.email || undefined,
+      password_hash: user.password_hash || undefined,
+      bio: user.profile.bio || undefined,
+      avatar: user.profile.avatar || undefined,
+      lastSeen: user.profile.last_seen || undefined,
+    }
+  }
+
+  async findAll(options = {}) {
+    const { skip = 0, limit = 20 } = options
+    const users = await prisma.user.findMany({
+      skip: skip,
+      take: limit,
+      orderBy: {
+        created_at: 'desc',
+      },
+      select: {
+        id: true,
+        username: true,
+        profile: {
+          select: {
+            bio: true,
+            avatar: true,
+            last_seen: true,
+          },
+        },
+      },
+    })
+    return users.map((user) => ({
+      id: user.id,
+      username: user.username,
+      bio: user.profile.bio || undefined,
+      avatar: user.profile.avatar || undefined,
+      lastSeen: user.profile.last_seen || undefined,
+    }))
+  }
+
+  async findProfiles(userIds) {
+    const users = await prisma.user.findMany({
+      where: {
+        id: {
+          in: userIds,
+        },
+      },
+      select: {
+        id: true,
+        username: true,
+        profile: {
+          select: {
+            avatar: true,
+            bio: true,
+            last_seen: true,
+          },
+        },
+      },
+    })
+    return users.map((user) => ({
+      id: user.id,
+      username: user.username,
+      bio: user.profile.bio || undefined,
+      avatar: user.profile.avatar || undefined,
+      lastSeen: user.profile.last_seen || undefined,
+    }))
   }
 
   async updateById(userId, updateData) {
-    this._assertUuid(userId, 'userId')
-
-    const hasUserUpdate = !!(updateData.username || updateData.email || updateData.password_hash)
-    const hasProfileUpdate = !!(updateData.bio || updateData.avatar)
-
-    const selectRow = async () => {
-      const result = await pool.query(
-        'SELECT users.id, users.username, users.email, users.password_hash, users.role, profiles.bio, profiles.avatar, profiles.last_seen, users.created_at, profiles.updated_at FROM users LEFT JOIN profiles ON users.id = profiles.user_id WHERE users.id = $1',
-        [userId]
-      )
-      return result.rows[0] || null
-    }
-
+    const { username, password_hash, bio, avatar } = updateData
+    const hasUserUpdate = username !== undefined || password_hash !== undefined
+    const hasProfileUpdate = bio !== undefined || avatar !== undefined
+    let updatedUser
     if (!hasUserUpdate && !hasProfileUpdate) {
-      return selectRow()
+      updatedUser = await this.findById(userId)
     }
-
-    const client = await pool.connect()
-    let txStarted = false
+    const data = {}
+    if (hasUserUpdate) {
+      if (username !== undefined) {
+        data.username = username
+      }
+      if (password_hash !== undefined) {
+        data.password_hash = password_hash
+      }
+    }
+    if (hasProfileUpdate) {
+      data.profile = {
+        update: {},
+      }
+      if (bio !== undefined) {
+        data.profile.update.bio = bio
+      }
+      if (avatar !== undefined) {
+        data.profile.update.avatar = avatar
+      }
+    }
     try {
-      await client.query('BEGIN')
-      txStarted = true
-
-      const userFields = []
-      const userValues = []
-      let paramIndex = 1
-      if (updateData.username) {
-        userFields.push(`username = $${paramIndex++}`)
-        userValues.push(updateData.username)
+      updatedUser = await prisma.user.update({
+        where: { id: userId },
+        data,
+        select: {
+          id: true,
+          username: true,
+          profile: {
+            select: {
+              bio: true,
+              avatar: true,
+              last_seen: true,
+            },
+          },
+        },
+      })
+      return {
+        id: updatedUser.id,
+        username: updatedUser.username,
+        bio: updatedUser.profile.bio || undefined,
+        avatar: updatedUser.profile.avatar || undefined,
+        lastSeen: updatedUser.last_seen || undefined,
       }
-      if (updateData.email) {
-        userFields.push(`email = $${paramIndex++}`)
-        userValues.push(updateData.email)
-      }
-      if (updateData.password_hash) {
-        userFields.push(`password_hash = $${paramIndex++}`)
-        userValues.push(updateData.password_hash)
-      }
-
-      if (userFields.length > 0) {
-        userValues.push(userId)
-
-        const queryText = `
-        UPDATE users 
-        SET ${userFields.join(', ')} 
-        WHERE id = $${paramIndex} 
-        RETURNING id, username, email, role, created_at
-      `
-
-        await client.query(queryText, userValues)
-      }
-
-      paramIndex = 1
-      const profileFields = []
-      const profileValues = []
-
-      if (updateData.bio) {
-        profileFields.push(`bio = $${paramIndex++}`)
-        profileValues.push(updateData.bio)
-      }
-
-      if (updateData.avatar) {
-        profileFields.push(`avatar = $${paramIndex++}`)
-        profileValues.push(updateData.avatar)
-      }
-
-      if (profileFields.length > 0) {
-        profileValues.push(userId)
-
-        const queryText = `UPDATE profiles SET ${profileFields.join(', ')} WHERE user_id = $${paramIndex} RETURNING bio, avatar`
-        await client.query(queryText, profileValues)
-      }
-
-      await client.query('COMMIT')
     } catch (err) {
-      if (txStarted) {
-        try {
-          await client.query('ROLLBACK')
-        } catch (_) {}
-      }
-      if (err.code === '23505') {
-        const c = String(err.constraint || '')
-        if (c.includes('email')) {
-          throw new ConflictError('Email already exists', 'EMAIL_ALREADY_EXISTS')
-        }
-        if (c.includes('username')) {
-          throw new ConflictError('Username already taken', 'USERNAME_ALREADY_TAKEN')
+      if (err instanceof Prisma.PrismaClientKnownRequestError) {
+        // P2002 is Prisma's universal code for "Unique constraint failed"
+        if (err.code === 'P2002') {
+          const target = err.meta?.target || []
+          const message = err.message || ''
+          if (target.includes('email') || message.includes('email')) {
+            throw new ConflictError('Email already exists', 'EMAIL_ALREADY_EXISTS')
+          }
+          if (target.includes('username') || message.includes('username')) {
+            throw new ConflictError('Username already taken', 'USERNAME_ALREADY_TAKEN')
+          }
         }
       }
       throw err
-    } finally {
-      client.release()
     }
-
-    return selectRow()
   }
-
-  async findByIdAndDelete(userId) {
-    this._assertUuid(userId, 'userId')
-    const result = await pool.query('DELETE FROM users where id = $1 RETURNING *', [userId])
-    return result.rows[0] || null
+  async deleteById(userId) {
+    try {
+      const deletedUser = await prisma.user.delete({
+        where: {
+          id: userId,
+        },
+      })
+      return {
+        id: deletedUser.id,
+        username: deletedUser.username,
+      }
+    } catch (err) {
+      // P2025 is Prisma's universal error code for "Record to delete does not exist."
+      if (err instanceof Prisma.PrismaClientKnownRequestError && err.code === 'P2025') {
+        return null
+      }
+      throw err
+    }
   }
   async deleteAvatar(userId) {
-    this._assertUuid(userId, 'userId')
-    await pool.query('UPDATE profiles SET avatar = NULL WHERE user_id = $1', [userId])
-    const result = await pool.query(
-      'SELECT users.id, users.username, users.email, users.role, profiles.bio, profiles.avatar, profiles.last_seen, users.created_at, profiles.updated_at FROM users LEFT JOIN profiles ON users.id = profiles.user_id WHERE users.id = $1',
-      [userId]
-    )
-    return result.rows[0] || null
+    await prisma.profile.updateMany({
+      where: {
+        user_id: userId,
+      },
+      data: {
+        avatar: null,
+      },
+    })
+    const user = await prisma.user.findUnique({
+      where: {
+        id: userId,
+      },
+      select: {
+        id: true,
+        username: true,
+        email: true,
+        profile: {
+          select: {
+            bio: true,
+            avatar: true,
+            last_seen: true,
+          },
+        },
+      },
+    })
+
+    if (!user) {
+      return null
+    }
+
+    return {
+      id: user.id,
+      username: user.username,
+      bio: user.profile.bio || undefined,
+      avatar: user.profile.avatar || undefined,
+      lastSeen: user.profile?.last_seen || undefined,
+    }
   }
 }
 

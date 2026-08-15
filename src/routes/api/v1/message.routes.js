@@ -12,15 +12,10 @@ router.use(limitRate(15 * 60 * 1000, 100, 'message'))
 // Apply auth to all routes
 router.use(asyncHandler(protect.accessToken))
 
-router
-  .route('/')
-  .post(validate(messageSchema.sendMessage), asyncHandler(messageControllers.sendMessage))
-  .get(asyncHandler(messageControllers.getMessages))
+router.get('/', asyncHandler(messageControllers.getMessages))
 
 router
   .route('/:messageId')
   .get(validate(messageSchema.getMessageById), asyncHandler(messageControllers.getMessageById))
-  .patch(validate(messageSchema.updateMessage), asyncHandler(messageControllers.updateMessage))
-  .delete(validate(messageSchema.deleteMessage), asyncHandler(messageControllers.deleteMessage))
 
 module.exports = router

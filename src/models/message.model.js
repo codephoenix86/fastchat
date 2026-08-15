@@ -26,6 +26,7 @@ const schema = new mongoose.Schema(
     },
     chat: {
       type: String,
+      ref: 'Chat',
       required: true,
     },
     type: {

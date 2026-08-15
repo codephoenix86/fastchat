@@ -40,14 +40,6 @@ const updateMessage = Joi.object({
 
 const getMessageById = Joi.object({
   params: Joi.object({
-    chatId: paramUuid('Chat ID'),
-    messageId: paramUuid('Message ID'),
-  }),
-})
-
-const deleteMessage = Joi.object({
-  params: Joi.object({
-    chatId: paramUuid('Chat ID'),
     messageId: paramUuid('Message ID'),
   }),
 })
@@ -64,4 +56,4 @@ const sendDirectMessage = Joi.object({
   ),
 })
 
-module.exports = { sendMessage, updateMessage, getMessageById, deleteMessage, sendDirectMessage }
+module.exports = { sendMessage, updateMessage, getMessageById, sendDirectMessage }

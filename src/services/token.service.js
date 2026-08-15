@@ -29,7 +29,7 @@ class TokenService {
     const expires = Math.floor(ms(env.REFRESH_TOKEN_TTL) / 1000)
 
     // Save the token as the key, and the user's ID as the value
-    await tokenRepository.saveRefreshToken(refreshToken, user.id, expires)
+    await tokenRepository.save(refreshToken, user.id, expires)
 
     return {
       accessToken,
@@ -82,7 +82,7 @@ class TokenService {
 
   async rotateTokens(refreshToken, user) {
     // Burn the old token
-    await tokenRepository.deleteRefreshToken(refreshToken)
+    await tokenRepository.delete(refreshToken)
 
     const tokens = await this.issueTokenPair(user)
     return tokens
@@ -95,7 +95,7 @@ class TokenService {
       throw new AuthenticationError('Session not found or already terminated', 'SESSION_NOT_FOUND')
     }
 
-    await tokenRepository.deleteRefreshToken(refreshToken)
+    await tokenRepository.delete(refreshToken)
   }
 }
 

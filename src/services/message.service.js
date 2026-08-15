@@ -1,178 +1,85 @@
-const { messageRepository, chatRepository } = require('@repositories')
+const { messageRepository } = require('@repositories')
 const { MESSAGE_STATUS } = require('@constants')
 const { logger } = require('@config')
 const { NotFoundError, AuthorizationError } = require('@errors')
 const chatService = require('./chat.service')
 
 class MessageService {
-  async sendMessage(messageData, senderId) {
-    const { content, chatId } = messageData
+  async sendMessage(messageData) {
+    const { content, chatId, senderId, file } = messageData
 
     // Verify chat exists
-    const chat = await chatRepository.findById(chatId)
-    if (!chat) {
-      throw new NotFoundError('Chat not found')
-    }
-
-    // Verify sender is a participant
-    if (!chat.participants.includes(senderId)) {
-      throw new AuthorizationError('You are not a member of this chat', 'NOT_A_MEMBER')
-    }
+    const chat = await chatService.getChatById(chatId, senderId)
 
     const message = await messageRepository.create({
       content,
+      file,
       sender: senderId,
-      chat: chatId,
+      chat: chat.id,
       status: MESSAGE_STATUS.SENT,
     })
 
-    return this.formatMessage(message)
+    return message
   }
 
-  async sendDirectMessage({ peerId, content }, senderId) {
-    const chat = await chatService.getOrCreatePrivateChat(senderId, peerId)
+  async sendDirectMessage({ senderId, peerId }, messageData) {
+    const { content, file } = messageData
+
+    const chat = await chatService.createPrivateChat(senderId, peerId)
 
     const message = await messageRepository.create({
       content,
+      file,
       sender: senderId,
-      chat: chat._id,
+      chat: chat.id,
       status: MESSAGE_STATUS.SENT,
     })
 
-    return {
-      chat: chatService.formatChat(chat),
-      message: this.formatMessage(message),
-    }
+    return { chat, message }
   }
 
   async getChatMessages(chatId, userId, options = {}) {
-    const { skip = 0, limit = 50, sort = { createdAt: -1 } } = options
-
     // Verify chat exists and user is a participant
-    const chat = await chatRepository.findById(chatId)
-    if (!chat) {
-      throw new NotFoundError('Chat not found')
-    }
+    const chat = await chatService.getChatById(chatId, userId)
 
-    if (!chat.participants.includes(userId)) {
-      throw new AuthorizationError('You are not a member of this chat', 'NOT_A_MEMBER')
-    }
+    const messages = await messageRepository.getChatMessages(chat.id, options)
 
-    // Get total count
-    const total = await messageRepository.countDocuments({ chat: chatId })
-
-    // Get messages with pagination
-    const populateFields = { path: 'sender', select: 'username avatar' }
-    const messages = await messageRepository.findAllWithPopulate(
-      { chat: chatId },
-      { skip, limit, sort },
-      populateFields
-    )
-
-    return {
-      messages: messages.map((message) => this.formatMessage(message)),
-      total,
-    }
+    return { total: messages.length, messages }
   }
 
-  async getMessageById(messageId, chatId, userId) {
-    const populateFields = { path: 'sender', select: 'username avatar' }
-    const message = await messageRepository.findByIdWithPopulate(messageId, populateFields)
-
+  async getMessageById(messageId, userId) {
+    const message = await messageRepository.findById(messageId)
     if (!message) {
       throw new NotFoundError('Message not found')
     }
-
-    if (message.chat.toString() !== chatId) {
+    const chat = await chatService.getChatById(message.chat.id, userId)
+    if (message.chat.id !== chat.id) {
       throw new NotFoundError('Message not found')
     }
-
-    const chat = await chatRepository.findById(message.chat)
-    if (!chat || !chat.participants.includes(userId)) {
-      throw new AuthorizationError('You are not a member of this chat', 'NOT_A_MEMBER')
-    }
-
-    return this.formatMessage(message)
+    return message
   }
 
   async updateMessage(messageId, userId, content) {
     const message = await messageRepository.findById(messageId)
-
     if (!message) {
       throw new NotFoundError('Message not found')
     }
-
+    const chat = await chatService.getChatById(message.chat.id, userId)
+    if (message.chat.id !== chat.id) {
+      throw new NotFoundError('Message not found')
+    }
     // Only sender can edit message
-    if (message.sender !== userId) {
+    if (message.sender.id !== userId) {
       throw new AuthorizationError('Only the author can modify this message', 'NOT_MESSAGE_OWNER')
     }
-
-    message.content = content
-    await message.save()
-
-    return this.formatMessage(message)
+    const updatedMessage = await messageRepository.updateById(messageId, { content })
+    return updatedMessage
   }
 
-  async deleteMessage(messageId, userId) {
-    const message = await messageRepository.findById(messageId)
-
-    if (!message) {
-      throw new NotFoundError('Message not found')
-    }
-
-    // Only sender can delete message
-    if (message.sender !== userId) {
-      throw new AuthorizationError('Only the author can delete this message', 'NOT_MESSAGE_OWNER')
-    }
-
-    await messageRepository.findByIdAndDelete(messageId)
-  }
-
-  async updateMessageStatus(messageId, status) {
-    const message = await messageRepository.findByIdAndUpdate(messageId, { status })
-
-    if (!message) {
-      throw new NotFoundError('Message not found')
-    }
-
-    logger.debug('Message status updated', { messageId, status })
-    return this.formatMessage(message)
-  }
-
-  async getPendingMessages(userId) {
-    // Get all chats user is part of
-    const chats = await chatRepository.findAll({ participants: userId }, {})
-    const chatIds = chats.map((chat) => chat._id)
-
-    // Get all messages that are still in 'sent' status
-    const populateFields = { path: 'sender', select: 'username avatar' }
-    const messages = await messageRepository.findAllWithPopulate(
-      {
-        chat: { $in: chatIds },
-        status: MESSAGE_STATUS.SENT,
-      },
-      { sort: { createdAt: 1 } },
-      populateFields
-    )
-
-    return messages.map((message) => this.formatMessage(message))
-  }
-
-  formatMessage(message) {
-    if (!message) {
-      return null
-    }
-
-    return {
-      id: message._id,
-      content: message.content,
-      sender: message.sender,
-      chat: message.chat,
-      status: message.status,
-      type: message.type,
-      createdAt: message.createdAt,
-      updatedAt: message.updatedAt,
-    }
+  async updateMessageStatus(chatId, status) {
+    const updatedMessage = await messageRepository.updateStatus(chatId, status)
+    logger.debug('Message status updated', { chatId, status })
+    return updatedMessage
   }
 }
 

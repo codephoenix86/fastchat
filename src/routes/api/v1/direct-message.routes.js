@@ -16,4 +16,9 @@ router.post(
   asyncHandler(messageControllers.sendDirectMessage)
 )
 
+router
+  .route('/:messageId')
+  .get(validate(messageSchema.getMessageById), asyncHandler(messageControllers.getMessageById))
+  .patch(validate(messageSchema.updateMessage), asyncHandler(messageControllers.updateMessage))
+
 module.exports = router

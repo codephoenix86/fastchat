@@ -13,7 +13,7 @@ const { ValidationError } = require('@errors')
  * - sort: Sort fields (e.g., -createdAt,username)
  */
 exports.getUsers = async (req, res) => {
-  const { page, limit, skip, sort } = pagination.parsePaginationParams(req.query)
+  const { page, limit, skip } = pagination.parsePaginationParams(req.query)
 
   // Build filter
   const filter = {}
@@ -21,13 +21,7 @@ exports.getUsers = async (req, res) => {
     filter.role = req.query.role
   }
 
-  const { users, total } = await userService.findAllUsers({
-    filter,
-    skip,
-    limit,
-    sort,
-    search: req.query.search,
-  })
+  const { users, total } = await userService.findAll({ skip, limit })
 
   const paginatedData = pagination.createPaginatedResponse(users, total, page, limit)
 
@@ -35,13 +29,13 @@ exports.getUsers = async (req, res) => {
 }
 
 exports.getUserById = async (req, res) => {
-  const user = await userService.findUserById(req.params.userId)
+  const user = await userService.findById(req.params.userId)
 
   res.status(StatusCodes.OK).json(new ApiResponse('User fetched successfully', { user }))
 }
 
 exports.getCurrentUser = async (req, res) => {
-  const user = await userService.findUserById(req.user.id)
+  const user = await userService.findById(req.user.id)
 
   res.status(StatusCodes.OK).json(new ApiResponse('Current user details', { user }))
 }
@@ -49,13 +43,13 @@ exports.getCurrentUser = async (req, res) => {
 exports.updateCurrentUser = async (req, res) => {
   const { username, bio } = req.body
 
-  const user = await userService.updateUser(req.user.id, { username, bio })
+  const user = await userService.updateById(req.user.id, { username, bio })
 
   res.status(StatusCodes.OK).json(new ApiResponse('User updated successfully', { user }))
 }
 
 exports.deleteCurrentUser = async (req, res) => {
-  const user = await userService.deleteUser(req.user.id)
+  const user = await userService.deleteById(req.user.id)
   res.status(StatusCodes.OK).json(new ApiResponse('Account deleted successfully', { user }))
 }
 

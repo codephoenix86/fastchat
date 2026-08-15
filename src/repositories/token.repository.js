@@ -6,7 +6,7 @@ class TokenRepository {
     return `rt:${token}`
   }
 
-  async saveRefreshToken(token, userId, expiresInSeconds) {
+  async save(token, userId, expiresInSeconds) {
     const key = this._buildKey(token)
     // Value is the userId, allowing us to identify who owns this token
     await client.set(key, userId, 'EX', expiresInSeconds)
@@ -18,7 +18,7 @@ class TokenRepository {
     return user
   }
 
-  async deleteRefreshToken(token) {
+  async delete(token) {
     const key = this._buildKey(token)
     await client.del(key)
   }

@@ -39,3 +39,4 @@ nodemon.json
 
 # Kubernetes secrets (contain real credentials)
 k8s/**/secret.yaml
+

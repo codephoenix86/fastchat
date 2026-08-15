@@ -3,7 +3,7 @@
  * Handles both regular and paginated responses
  */
 class ApiResponse {
-  constructor(message, data = null) {
+  constructor(message, data = undefined) {
     this.success = true
     this.message = message
     this.timestamp = new Date().toISOString()

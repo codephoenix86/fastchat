@@ -21,8 +21,8 @@ router
 router
   .route('/:chatId')
   .get(validate(chatSchema.getChatById), asyncHandler(chatControllers.getChatById))
-  .patch(validate(chatSchema.updateChat), asyncHandler(chatControllers.updateChat))
-  .delete(validate(chatSchema.deleteChat), asyncHandler(chatControllers.deleteChat))
+  .patch(validate(chatSchema.updateChat), asyncHandler(chatControllers.updateGroup))
+  .delete(validate(chatSchema.deleteGroup), asyncHandler(chatControllers.deleteGroup))
 
 // Members as sub-resource (RESTful)
 router.get(

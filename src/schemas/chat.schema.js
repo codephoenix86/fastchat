@@ -94,7 +94,7 @@ const removeMember = Joi.object({
   }),
 })
 
-const deleteChat = Joi.object({
+const deleteGroup = Joi.object({
   params: Joi.object({
     chatId: paramUuid('Chat ID'),
   }),
@@ -118,7 +118,7 @@ module.exports = {
   updateChat,
   addMember,
   removeMember,
-  deleteChat,
+  deleteGroup,
   getMembers,
   removeSelf,
 }

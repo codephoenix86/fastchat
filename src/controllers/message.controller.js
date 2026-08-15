@@ -34,11 +34,8 @@ exports.getMessages = async (req, res) => {
 }
 
 exports.getMessageById = async (req, res) => {
-  const message = await messageService.getMessageById(
-    req.params.messageId,
-    req.params.chatId,
-    req.user.id
-  )
+  const { messageId } = req.params
+  const message = await messageService.getMessageById(messageId, req.user.id)
 
   res.status(StatusCodes.OK).json(new ApiResponse('Message fetched successfully', { message }))
 }
@@ -55,21 +52,13 @@ exports.updateMessage = async (req, res) => {
   res.status(StatusCodes.OK).json(new ApiResponse('Message updated successfully', { message }))
 }
 
-exports.deleteMessage = async (req, res) => {
-  const { chatId, messageId } = req.params
-
-  await messageService.deleteMessage(messageId, req.user.id)
-
-  // Emit real-time deletion
-  io.to(chatId).emit(SOCKET_EVENTS.MESSAGE_DELETED, { messageId })
-
-  res.status(StatusCodes.OK).json(new ApiResponse('Message deleted successfully'))
-}
-
 exports.sendDirectMessage = async (req, res) => {
   const { peerId, content } = req.body
 
-  const { chat, message } = await messageService.sendDirectMessage({ peerId, content }, req.user.id)
+  const { chat, message } = await messageService.sendDirectMessage(
+    { senderId: req.user.id, peerId },
+    { content }
+  )
 
   io.to(chat.id).emit(SOCKET_EVENTS.MESSAGE_NEW, message)
 
