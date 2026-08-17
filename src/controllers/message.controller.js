@@ -8,7 +8,7 @@ exports.sendMessage = async (req, res) => {
   const { content } = req.body
   const { chatId } = req.params
 
-  const message = await messageService.sendMessage({ content, chatId }, req.user.id)
+  const message = await messageService.sendMessage({ content, chatId, senderId: req.user.id })
 
   // Emit real-time message to chat room
   io.to(chatId).emit(SOCKET_EVENTS.MESSAGE_NEW, message)
