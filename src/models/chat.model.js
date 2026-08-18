@@ -52,6 +52,10 @@ const schema = new mongoose.Schema(
         return this.type === CHAT_TYPES.GROUP
       },
     },
+    lastMessage: {
+      type: String,
+      ref: 'Message',
+    },
   },
   { timestamps: true }
 )

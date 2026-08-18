@@ -19,6 +19,8 @@ class MessageService {
       status: MESSAGE_STATUS.SENT,
     })
 
+    await chatService.updateLastMessage(chatId, senderId, message.id)
+
     return message
   }
 
@@ -35,7 +37,9 @@ class MessageService {
       status: MESSAGE_STATUS.SENT,
     })
 
-    return { chat, message }
+    const updatedChat = await chatService.updateLastMessage(chat.id, senderId, message.id)
+
+    return { chat: updatedChat, message }
   }
 
   async getChatMessages(chatId, userId, options = {}) {

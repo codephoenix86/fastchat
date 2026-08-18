@@ -222,6 +222,15 @@ class ChatService {
 
     await chatRepository.deleteGroupById(chatId)
   }
+
+  async updateLastMessage(chatId, userId, messageId) {
+    const chat = await chatRepository.findById(chatId)
+    if (!chat.participants.some((p) => p.id === userId)) {
+      throw AuthorizationError('You are not a member of this chat', 'NOT_A_MEMBER')
+    }
+    const updatedChat = chatRepository.updateLastMessage(chatId, messageId)
+    return updatedChat
+  }
 }
 
 module.exports = new ChatService()

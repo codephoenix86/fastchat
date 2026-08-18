@@ -52,11 +52,19 @@ class ChatRepository {
   }
 
   async findById(chatId) {
-    const chat = await Chat.findById(chatId).lean()
+    const chat = await Chat.findById(chatId).populate('lastMessage').lean()
     if (!chat) {
       return null
     }
     await this._populateParticipants([chat])
+    const lastMessage = chat.lastMessage
+    chat.lastMessage = {
+      id: lastMessage._id,
+      content: lastMessage.content,
+      status: lastMessage.status,
+      sender: lastMessage.sender,
+      createdAt: lastMessage.createdAt,
+    }
     return {
       id: chat._id,
       type: chat.type,
@@ -64,16 +72,32 @@ class ChatRepository {
       groupName: chat.groupName || undefined,
       groupPicture: chat.groupPicture || undefined,
       admin: chat.admin || undefined,
+      lastMessage: chat.lastMessage || undefined,
     }
   }
 
   async findAll(options = {}) {
     const { skip = 0, limit = 20 } = options
-    const chats = await Chat.find().sort({ createdAt: -1 }).skip(skip).limit(limit).lean()
+    const chats = await Chat.find()
+      .sort({ createdAt: -1 })
+      .populate('lastMessage')
+      .skip(skip)
+      .limit(limit)
+      .lean()
     if (!chats) {
       return null
     }
     await this._populateParticipants(chats)
+    chats.forEach((chat) => {
+      const lastMessage = chat.lastMessage
+      chat.lastMessage = {
+        id: lastMessage._id,
+        content: lastMessage.content,
+        status: lastMessage.status,
+        sender: lastMessage.sender,
+        createdAt: lastMessage.createdAt,
+      }
+    })
     return chats.map((chat) => ({
       id: chat._id,
       type: chat.type,
@@ -81,6 +105,7 @@ class ChatRepository {
       groupName: chat.groupName || undefined,
       groupPicture: chat.groupPicture || undefined,
       admin: chat.admin || undefined,
+      lastMessage: chat.lastMessage || undefined,
     }))
   }
   async updateGroupById(chatId, updateData) {
@@ -89,11 +114,21 @@ class ChatRepository {
       chatId,
       { groupName, groupPicture, admin },
       { new: true }
-    ).lean()
+    )
+      .populate('lastMessage')
+      .lean()
     if (!updatedChat) {
       return null
     }
     await this._populateParticipants([updatedChat])
+    const lastMessage = updatedChat.lastMessage
+    updatedChat.lastMessage = {
+      id: lastMessage._id,
+      content: lastMessage.content,
+      status: lastMessage.status,
+      sender: lastMessage.sender,
+      createdAt: lastMessage.createdAt,
+    }
     return {
       id: updatedChat._id,
       type: updatedChat.type,
@@ -101,6 +136,7 @@ class ChatRepository {
       groupPicture: updatedChat.groupPicture || undefined,
       participants: updatedChat.participants || undefined,
       admin: updatedChat.admin || undefined,
+      lastMessage: updatedChat.lastMessage || undefined,
     }
   }
 
@@ -109,11 +145,21 @@ class ChatRepository {
       chatId,
       { $addToSet: { participants: userId } },
       { new: true }
-    ).lean()
+    )
+      .populate('lastMessage')
+      .lean()
     if (!updatedChat) {
       return null
     }
     await this._populateParticipants([updatedChat])
+    const lastMessage = updatedChat.lastMessage
+    updatedChat.lastMessage = {
+      id: lastMessage._id,
+      content: lastMessage.content,
+      status: lastMessage.status,
+      sender: lastMessage.sender,
+      createdAt: lastMessage.createdAt,
+    }
     return {
       id: updatedChat._id,
       type: updatedChat.type,
@@ -121,6 +167,7 @@ class ChatRepository {
       groupPicture: updatedChat.groupPicture || undefined,
       groupName: updatedChat.groupName || undefined,
       admin: updatedChat.admin || undefined,
+      lastMessage: updatedChat.lastMessage || undefined,
     }
   }
 
@@ -129,11 +176,21 @@ class ChatRepository {
       chatId,
       { $pull: { participants: userId } },
       { new: true }
-    ).lean()
+    )
+      .populate('lastMessage')
+      .lean()
     if (!updatedChat) {
       return null
     }
     await this._populateParticipants([updatedChat])
+    const lastMessage = updatedChat.lastMessage
+    updatedChat.lastMessage = {
+      id: lastMessage._id,
+      content: lastMessage.content,
+      status: lastMessage.status,
+      sender: lastMessage.sender,
+      createdAt: lastMessage.createdAt,
+    }
     return {
       id: updatedChat._id,
       type: updatedChat.type,
@@ -141,6 +198,7 @@ class ChatRepository {
       groupPicture: updatedChat.groupPicture || undefined,
       groupName: updatedChat.groupName || undefined,
       admin: updatedChat.admin || undefined,
+      lastMessage: updatedChat.lastMessage || undefined,
     }
   }
 
@@ -155,12 +213,23 @@ class ChatRepository {
       { chatKey },
       { $setOnInsert: { type: CHAT_TYPES.PRIVATE, chatKey, participants } },
       { upsert: true, new: true, setDefaultsOnInsert: true }
-    ).lean()
+    )
+      .populate('lastMessage')
+      .lean()
     await this._populateParticipants([chat])
+    const lastMessage = chat.lastMessage
+    chat.lastMessage = {
+      id: lastMessage._id,
+      content: lastMessage.content,
+      status: lastMessage.status,
+      sender: lastMessage.sender,
+      createdAt: lastMessage.createdAt,
+    }
     return {
       id: chat._id,
       type: chat.type,
       participants: chat.participants,
+      lastMessage: chat.lastMessage || undefined,
     }
   }
 
@@ -170,6 +239,41 @@ class ChatRepository {
       .sort({ createdAt: -1 })
       .skip(skip)
       .limit(limit)
+      .populate('lastMessage')
+      .lean()
+    if (!chats) {
+      return null
+    }
+    chats.forEach((chat) => {
+      const lastMessage = chat.lastMessage
+      chat.lastMessage = {
+        id: lastMessage._id,
+        content: lastMessage.content,
+        status: lastMessage.status,
+        sender: lastMessage.sender,
+        createdAt: lastMessage.createdAt,
+      }
+    })
+    await this._populateParticipants(chats)
+    return chats.map((chat) => ({
+      id: chat._id,
+      type: chat.type,
+      groupName: chat.groupName || undefined,
+      groupPicture: chat.groupPicture || undefined,
+      participants: chat.participants,
+      admin: chat.admin || undefined,
+      lastMessage: chat.lastMessage || undefined,
+    }))
+  }
+
+  async deleteGroupById(chatId) {
+    await Chat.findByIdAndDelete(chatId)
+  }
+
+  async getAllUserChats(userId) {
+    const chats = await Chat.find({ participants: userId })
+      .sort({ createdAt: -1 })
+      .populate('lastMessage')
       .lean()
     if (!chats) {
       return null
@@ -182,27 +286,36 @@ class ChatRepository {
       groupPicture: chat.groupPicture || undefined,
       participants: chat.participants,
       admin: chat.admin || undefined,
+      lastMessage: chat.lastMessage || undefined,
     }))
   }
 
-  async deleteGroupById(chatId) {
-    await Chat.findByIdAndDelete(chatId)
-  }
-
-  async getAllUserChats(userId) {
-    const chats = await Chat.find({ participants: userId }).sort({ createdAt: -1 }).lean()
-    if (!chats) {
-      return null
+  async updateLastMessage(chatId, messageId) {
+    const updatedChat = await Chat.findByIdAndUpdate(
+      chatId,
+      { lastMessage: messageId },
+      { new: true }
+    )
+      .populate('lastMessage')
+      .lean()
+    const lastMessage = updatedChat.lastMessage
+    updatedChat.lastMessage = {
+      id: lastMessage._id,
+      content: lastMessage.content,
+      status: lastMessage.status,
+      sender: lastMessage.sender,
+      createdAt: lastMessage.createdAt,
     }
-    await this._populateParticipants(chats)
-    return chats.map((chat) => ({
-      id: chat._id,
-      type: chat.type,
-      groupName: chat.groupName || undefined,
-      groupPicture: chat.groupPicture || undefined,
-      participants: chat.participants,
-      admin: chat.admin || undefined,
-    }))
+    await this._populateParticipants([updatedChat])
+    return {
+      id: updatedChat._id,
+      type: updatedChat.type,
+      groupName: updatedChat.groupName || undefined,
+      groupPicture: updatedChat.groupPicture || undefined,
+      participants: updatedChat.participants,
+      admin: updatedChat.admin || undefined,
+      lastMessage: updatedChat.lastMessage || undefined,
+    }
   }
 }
 

@@ -33,6 +33,7 @@ class MessageRepository {
       file: message.file || undefined,
       sender: message.sender,
       chat: message.chat,
+      createdAt: message.createdAt,
     }
   }
 
@@ -53,6 +54,7 @@ class MessageRepository {
       file: message.file || undefined,
       sender: message.sender,
       chat: message.chat || undefined,
+      createdAt: message.createdAt,
     }
   }
 
@@ -73,6 +75,7 @@ class MessageRepository {
       content: message.content || undefined,
       file: message.file || undefined,
       sender: message.sender,
+      createdAt: message.createdAt,
     }))
   }
 
@@ -89,6 +92,7 @@ class MessageRepository {
       id: message._id,
       content: message.content,
       sender: message.sender,
+      createAt: message.createdAt,
     }
   }
 
@@ -108,6 +112,7 @@ class MessageRepository {
       content: message.content || undefined,
       file: message.file || undefined,
       sender: message.sender,
+      createdAt: message.createdAt,
     }))
   }
 
@@ -123,6 +128,7 @@ class MessageRepository {
       status: updatedMessage.status,
       chat: updatedMessage.chat,
       sender: updatedMessage.sender,
+      createdAt: updatedMessage.createdAt,
     }))
   }
 }
