@@ -58,12 +58,14 @@ class ChatRepository {
     }
     await this._populateParticipants([chat])
     const lastMessage = chat.lastMessage
-    chat.lastMessage = {
-      id: lastMessage._id,
-      content: lastMessage.content,
-      status: lastMessage.status,
-      sender: lastMessage.sender,
-      createdAt: lastMessage.createdAt,
+    if (lastMessage) {
+      chat.lastMessage = {
+        id: lastMessage._id,
+        content: lastMessage.content,
+        status: lastMessage.status,
+        sender: lastMessage.sender,
+        createdAt: lastMessage.createdAt,
+      }
     }
     return {
       id: chat._id,
@@ -90,12 +92,14 @@ class ChatRepository {
     await this._populateParticipants(chats)
     chats.forEach((chat) => {
       const lastMessage = chat.lastMessage
-      chat.lastMessage = {
-        id: lastMessage._id,
-        content: lastMessage.content,
-        status: lastMessage.status,
-        sender: lastMessage.sender,
-        createdAt: lastMessage.createdAt,
+      if (lastMessage) {
+        chat.lastMessage = {
+          id: lastMessage._id,
+          content: lastMessage.content,
+          status: lastMessage.status,
+          sender: lastMessage.sender,
+          createdAt: lastMessage.createdAt,
+        }
       }
     })
     return chats.map((chat) => ({
@@ -122,12 +126,14 @@ class ChatRepository {
     }
     await this._populateParticipants([updatedChat])
     const lastMessage = updatedChat.lastMessage
-    updatedChat.lastMessage = {
-      id: lastMessage._id,
-      content: lastMessage.content,
-      status: lastMessage.status,
-      sender: lastMessage.sender,
-      createdAt: lastMessage.createdAt,
+    if (lastMessage) {
+      updatedChat.lastMessage = {
+        id: lastMessage._id,
+        content: lastMessage.content,
+        status: lastMessage.status,
+        sender: lastMessage.sender,
+        createdAt: lastMessage.createdAt,
+      }
     }
     return {
       id: updatedChat._id,
@@ -153,12 +159,14 @@ class ChatRepository {
     }
     await this._populateParticipants([updatedChat])
     const lastMessage = updatedChat.lastMessage
-    updatedChat.lastMessage = {
-      id: lastMessage._id,
-      content: lastMessage.content,
-      status: lastMessage.status,
-      sender: lastMessage.sender,
-      createdAt: lastMessage.createdAt,
+    if (lastMessage) {
+      updatedChat.lastMessage = {
+        id: lastMessage._id,
+        content: lastMessage.content,
+        status: lastMessage.status,
+        sender: lastMessage.sender,
+        createdAt: lastMessage.createdAt,
+      }
     }
     return {
       id: updatedChat._id,
@@ -184,12 +192,14 @@ class ChatRepository {
     }
     await this._populateParticipants([updatedChat])
     const lastMessage = updatedChat.lastMessage
-    updatedChat.lastMessage = {
-      id: lastMessage._id,
-      content: lastMessage.content,
-      status: lastMessage.status,
-      sender: lastMessage.sender,
-      createdAt: lastMessage.createdAt,
+    if (lastMessage) {
+      updatedChat.lastMessage = {
+        id: lastMessage._id,
+        content: lastMessage.content,
+        status: lastMessage.status,
+        sender: lastMessage.sender,
+        createdAt: lastMessage.createdAt,
+      }
     }
     return {
       id: updatedChat._id,
@@ -218,12 +228,14 @@ class ChatRepository {
       .lean()
     await this._populateParticipants([chat])
     const lastMessage = chat.lastMessage
-    chat.lastMessage = {
-      id: lastMessage._id,
-      content: lastMessage.content,
-      status: lastMessage.status,
-      sender: lastMessage.sender,
-      createdAt: lastMessage.createdAt,
+    if (lastMessage) {
+      chat.lastMessage = {
+        id: lastMessage._id,
+        content: lastMessage.content,
+        status: lastMessage.status,
+        sender: lastMessage.sender,
+        createdAt: lastMessage.createdAt,
+      }
     }
     return {
       id: chat._id,
@@ -244,17 +256,19 @@ class ChatRepository {
     if (!chats) {
       return null
     }
+    await this._populateParticipants(chats)
     chats.forEach((chat) => {
       const lastMessage = chat.lastMessage
-      chat.lastMessage = {
-        id: lastMessage._id,
-        content: lastMessage.content,
-        status: lastMessage.status,
-        sender: lastMessage.sender,
-        createdAt: lastMessage.createdAt,
+      if (lastMessage) {
+        chat.lastMessage = {
+          id: lastMessage._id,
+          content: lastMessage.content,
+          status: lastMessage.status,
+          sender: lastMessage.sender,
+          createdAt: lastMessage.createdAt,
+        }
       }
     })
-    await this._populateParticipants(chats)
     return chats.map((chat) => ({
       id: chat._id,
       type: chat.type,
@@ -279,6 +293,18 @@ class ChatRepository {
       return null
     }
     await this._populateParticipants(chats)
+    chats.forEach((chat) => {
+      const lastMessage = chat.lastMessage
+      if (lastMessage) {
+        chat.lastMessage = {
+          id: lastMessage._id,
+          content: lastMessage.content,
+          status: lastMessage.status,
+          sender: lastMessage.sender,
+          createdAt: lastMessage.createdAt,
+        }
+      }
+    })
     return chats.map((chat) => ({
       id: chat._id,
       type: chat.type,
@@ -299,12 +325,14 @@ class ChatRepository {
       .populate('lastMessage')
       .lean()
     const lastMessage = updatedChat.lastMessage
-    updatedChat.lastMessage = {
-      id: lastMessage._id,
-      content: lastMessage.content,
-      status: lastMessage.status,
-      sender: lastMessage.sender,
-      createdAt: lastMessage.createdAt,
+    if (lastMessage) {
+      updatedChat.lastMessage = {
+        id: lastMessage._id,
+        content: lastMessage.content,
+        status: lastMessage.status,
+        sender: lastMessage.sender,
+        createdAt: lastMessage.createdAt,
+      }
     }
     await this._populateParticipants([updatedChat])
     return {
