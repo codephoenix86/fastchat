@@ -6,7 +6,10 @@ RUN apk add --no-cache python3 make g++
 
 COPY package*.json .
 
+COPY prisma ./prisma/
+
 RUN npm ci --ignore-scripts
+
 RUN npx prisma generate
 
 COPY . .
