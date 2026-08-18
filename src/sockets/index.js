@@ -1,5 +1,5 @@
 const { Server } = require('socket.io')
-const { presenceService } = require('@services')
+const { presenceService, chatService } = require('@services')
 const { env, logger } = require('@config')
 const { SOCKET_EVENTS } = require('@constants')
 const { authMiddleware } = require('./middlewares')
@@ -26,6 +26,11 @@ const init = (server) => {
     const socketId = socket.id
 
     logger.info('Socket connected', { socketId, userId })
+
+    socket.join(`user:${userId}`)
+
+    const { chats } = await chatService.getUserChats(userId)
+    chats.forEach((chat) => socket.join(`chat:${chat.id}`))
 
     registerChatHandlers(io, socket)
     registerMessageHandlers(io, socket)

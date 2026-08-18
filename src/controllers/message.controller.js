@@ -11,7 +11,12 @@ exports.sendMessage = async (req, res) => {
   const message = await messageService.sendMessage({ content, chatId, senderId: req.user.id })
 
   // Emit real-time message to chat room
-  io.to(chatId).emit(SOCKET_EVENTS.MESSAGE_NEW, message)
+  io.to(`chat:${chatId}`).emit(SOCKET_EVENTS.MESSAGE_NEW, {
+    message: message,
+    chat: message.chat,
+    content: message.content,
+    createdAt: message.createdAt,
+  })
 
   res
     .status(StatusCodes.CREATED)
@@ -46,8 +51,13 @@ exports.updateMessage = async (req, res) => {
 
   const message = await messageService.updateMessage(req.params.messageId, req.user.id, content)
 
-  // Emit real-time update
-  io.to(chatId).emit(SOCKET_EVENTS.MESSAGE_UPDATED, message)
+  // Emit real-time message to chat room
+  io.to(`chat:${chatId}`).emit(SOCKET_EVENTS.MESSAGE_NEW, {
+    messageId: message.id,
+    chatId: message.chat.id,
+    content: message.content,
+    createdAt: message.createdAt,
+  })
 
   res.status(StatusCodes.OK).json(new ApiResponse('Message updated successfully', { message }))
 }
