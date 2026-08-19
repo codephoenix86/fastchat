@@ -67,7 +67,7 @@ class ChatService {
     }
 
     // Verify user is a participant
-    if (!chat.participants.some((p) => p.id === userId)) {
+    if (!chat.participants.some((p) => p.user.id === userId)) {
       throw new AuthorizationError('You are not a member of this chat', 'NOT_A_MEMBER')
     }
 
@@ -92,7 +92,7 @@ class ChatService {
 
     if (
       updateData.admin &&
-      !chat.participants.some((participant) => participant.id === updateData.admin)
+      !chat.participants.some((participant) => participant.user.id === updateData.admin)
     ) {
       throw new ValidationError('New admin must be a member of the group', 'NOT_A_MEMBER')
     }
@@ -132,7 +132,7 @@ class ChatService {
       throw new AuthorizationError('Only admin can add other members', 'ADMIN_REQUIRED')
     }
 
-    if (chat.participants.some((participant) => participant.id === newMemberId)) {
+    if (chat.participants.some((participant) => participant.user.id === newMemberId)) {
       throw new ConflictError('User is already a member of this group', 'ALREADY_MEMBER')
     }
 
@@ -175,7 +175,7 @@ class ChatService {
       )
     }
 
-    if (!chat.participants.some((participant) => participant.id === memberIdToRemove)) {
+    if (!chat.participants.some((participant) => participant.user.id === memberIdToRemove)) {
       throw new ValidationError('User is not a member of this group', 'MEMBER_NOT_FOUND')
     }
 
@@ -197,7 +197,7 @@ class ChatService {
       throw new NotFoundError('Chat not found')
     }
 
-    if (!chat.participants.some((participant) => participant.id === userId)) {
+    if (!chat.participants.some((participant) => participant.user.id === userId)) {
       throw new AuthorizationError('You are not a member of this chat', 'NOT_A_MEMBER')
     }
 
@@ -212,7 +212,7 @@ class ChatService {
       throw new NotFoundError('Chat not found')
     }
 
-    if (!chat.participants.some((participant) => participant.id === userId)) {
+    if (!chat.participants.some((participant) => participant.user.id === userId)) {
       throw new AuthorizationError('You are not a member of this chat', 'NOT_A_MEMBER')
     }
 
@@ -223,12 +223,26 @@ class ChatService {
     await chatRepository.deleteGroupById(chatId)
   }
 
-  async updateLastMessage(chatId, userId, messageId) {
-    const chat = await chatRepository.findById(chatId)
-    if (!chat.participants.some((p) => p.id === userId)) {
-      throw AuthorizationError('You are not a member of this chat', 'NOT_A_MEMBER')
+  async updateLastMessage(chat, userId, message) {
+    if (!chat.participants.some((p) => p.user.id === userId)) {
+      throw new AuthorizationError('You are not a member of this chat', 'NOT_A_MEMBER')
     }
-    const updatedChat = chatRepository.updateLastMessage(chatId, messageId)
+    const updatedChat = await chatRepository.updateLastMessage(chat, message)
+    return updatedChat
+  }
+
+  async markAsRead(chatId, userId, sequenceId) {
+    const chat = await chatRepository.findById(chatId)
+
+    if (!chat) {
+      throw new NotFoundError('Chat not found')
+    }
+
+    if (!chat.participants.some((participant) => participant.user.id === userId)) {
+      throw new AuthorizationError('You are not a member of this chat', 'NOT_A_MEMBER')
+    }
+
+    const updatedChat = await chatRepository.markAsRead(chatId, userId, sequenceId)
     return updatedChat
   }
 }

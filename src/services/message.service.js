@@ -19,7 +19,7 @@ class MessageService {
       status: MESSAGE_STATUS.SENT,
     })
 
-    await chatService.updateLastMessage(chatId, senderId, message.id)
+    await chatService.updateLastMessage(chat, senderId, message)
 
     return message
   }
@@ -28,7 +28,6 @@ class MessageService {
     const { content, file } = messageData
 
     const chat = await chatService.createPrivateChat(senderId, peerId)
-
     const message = await messageRepository.create({
       content,
       file,
@@ -37,7 +36,7 @@ class MessageService {
       status: MESSAGE_STATUS.SENT,
     })
 
-    const updatedChat = await chatService.updateLastMessage(chat.id, senderId, message.id)
+    const updatedChat = await chatService.updateLastMessage(chat, senderId, message)
 
     return { chat: updatedChat, message }
   }

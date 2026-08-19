@@ -112,6 +112,15 @@ const removeSelf = Joi.object({
   }),
 })
 
+const markAsRead = Joi.object({
+  params: Joi.object({
+    chatId: paramUuid('Chat ID'),
+  }),
+  query: Joi.object({
+    sequence: Joi.number().min(1).required(),
+  }),
+})
+
 module.exports = {
   createChat,
   getChatById,
@@ -121,4 +130,5 @@ module.exports = {
   deleteGroup,
   getMembers,
   removeSelf,
+  markAsRead,
 }

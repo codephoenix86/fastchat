@@ -2,6 +2,18 @@ const mongoose = require('mongoose')
 const crypto = require('crypto')
 const { CHAT_TYPES } = require('@constants')
 
+const participantSchema = new mongoose.Schema(
+  {
+    user: String,
+    latestSequence: {
+      type: Number,
+      required: true,
+      default: 0,
+    },
+  },
+  { _id: false }
+)
+
 const schema = new mongoose.Schema(
   {
     _id: {
@@ -28,7 +40,7 @@ const schema = new mongoose.Schema(
       index: true,
     },
     participants: {
-      type: [String],
+      type: [participantSchema],
       required: true,
       validate: {
         validator: function (value) {
@@ -45,6 +57,11 @@ const schema = new mongoose.Schema(
         },
         message: 'Participants must be an array with valid number of users',
       },
+    },
+    lastReadSequence: {
+      type: Number,
+      required: true,
+      default: 0,
     },
     admin: {
       type: String,

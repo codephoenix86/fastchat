@@ -89,3 +89,12 @@ exports.getMembers = async (req, res) => {
 
   res.status(StatusCodes.OK).json(new ApiResponse('Members fetched successfully', members))
 }
+
+exports.markAsRead = async (req, res) => {
+  const { sequence } = req.query
+  const { chatId } = req.params
+  const updatedChat = await chatService.markAsRead(chatId, req.user.id, sequence)
+  res
+    .status(StatusCodes.OK)
+    .json(new ApiResponse('User marked as read successfully', { chat: updatedChat }))
+}
