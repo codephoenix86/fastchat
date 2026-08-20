@@ -19,9 +19,9 @@ class MessageService {
       status: MESSAGE_STATUS.SENT,
     })
 
-    await chatService.updateLastMessage(chat, senderId, message)
+    const updatedChat = await chatService.updateLastMessage(chat, senderId, message)
 
-    return message
+    return { chat: updatedChat, message }
   }
 
   async sendDirectMessage({ senderId, peerId }, messageData) {

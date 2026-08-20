@@ -8,7 +8,11 @@ exports.sendMessage = async (req, res) => {
   const { content } = req.body
   const { chatId } = req.params
 
-  const message = await messageService.sendMessage({ content, chatId, senderId: req.user.id })
+  const { chat, message } = await messageService.sendMessage({
+    content,
+    chatId,
+    senderId: req.user.id,
+  })
 
   // Emit real-time message to chat room
   io.to(`chat:${chatId}`).emit(SOCKET_EVENTS.MESSAGE_NEW, {
@@ -20,7 +24,7 @@ exports.sendMessage = async (req, res) => {
 
   res
     .status(StatusCodes.CREATED)
-    .json(new ApiResponse('Message sent successfully', { message }, StatusCodes.CREATED))
+    .json(new ApiResponse('Message sent successfully', { chat, message }, StatusCodes.CREATED))
 }
 
 exports.getMessages = async (req, res) => {
@@ -53,8 +57,8 @@ exports.updateMessage = async (req, res) => {
 
   // Emit real-time message to chat room
   io.to(`chat:${chatId}`).emit(SOCKET_EVENTS.MESSAGE_NEW, {
-    messageId: message.id,
-    chatId: message.chat.id,
+    message: message,
+    chat: message.chat,
     content: message.content,
     createdAt: message.createdAt,
   })
@@ -70,7 +74,12 @@ exports.sendDirectMessage = async (req, res) => {
     { content }
   )
 
-  io.to(chat.id).emit(SOCKET_EVENTS.MESSAGE_NEW, message)
+  io.to(`user:${peerId}`).emit(SOCKET_EVENTS.MESSAGE_NEW, {
+    message: message,
+    chat: message.chat,
+    content: message.content,
+    createdAt: message.createdAt,
+  })
 
   res
     .status(StatusCodes.CREATED)

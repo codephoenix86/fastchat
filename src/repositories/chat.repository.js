@@ -340,12 +340,39 @@ class ChatRepository {
 
   async updateLastMessage(chat, message) {
     const updatedChat = await Chat.findOneAndUpdate(
-      { _id: chat.id, 'participants.user': message.sender.id },
       {
-        lastMessage: message.id,
-        $inc: { lastReadSequence: 1 },
-        $set: { 'participants.$.latestSequence': chat.lastReadSequence + 1 },
+        _id: chat.id,
+        $or: [{ lastMessageAt: { $lt: message.createdAt } }, { lastMessageAt: null }],
+        'participants.user': message.sender.id,
       },
+      [
+        {
+          $set: {
+            lastMessage: message.id,
+            lastMessageAt: message.createdAt,
+            lastReadSequence: { $add: [{ $ifNull: ['$lastReadSequence', 0] }, 1] },
+          },
+        },
+        {
+          $set: {
+            participants: {
+              $map: {
+                input: '$participants',
+                as: 'p',
+                in: {
+                  $cond: {
+                    if: { $eq: ['$$p.user', message.sender.id] },
+                    // Set latestSequence to the newly incremented lastReadSequence for the sender
+                    then: { $mergeObjects: ['$$p', { latestSequence: '$lastReadSequence' }] },
+                    // Leave other participants unchanged
+                    else: '$$p',
+                  },
+                },
+              },
+            },
+          },
+        },
+      ],
       { new: true }
     )
       .populate('lastMessage')
@@ -379,7 +406,7 @@ class ChatRepository {
   async markAsRead(chatId, userId, sequenceId) {
     const updatedChat = await Chat.findOneAndUpdate(
       { _id: chatId, 'participants.user': userId },
-      { $set: { 'participants.$.latestSequence': sequenceId } },
+      { $max: { 'participants.$.latestSequence': sequenceId } },
       { new: true }
     )
       .populate('lastMessage')

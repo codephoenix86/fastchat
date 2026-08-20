@@ -73,6 +73,7 @@ const schema = new mongoose.Schema(
       type: String,
       ref: 'Message',
     },
+    lastMessageAt: Date,
   },
   { timestamps: true }
 )
