@@ -1,5 +1,5 @@
 const { StatusCodes } = require('http-status-codes')
-const { messageService } = require('@services')
+const { messageService, presenceService } = require('@services')
 const { ApiResponse, pagination } = require('@utils')
 const { SOCKET_EVENTS } = require('@constants')
 const { io } = require('@sockets')
@@ -74,7 +74,11 @@ exports.sendDirectMessage = async (req, res) => {
     { content }
   )
 
-  io.to(`user:${peerId}`).emit(SOCKET_EVENTS.MESSAGE_NEW, {
+  const user1SocketIds = await presenceService.getUserSockets(req.user.id)
+  const user2SocketIds = await presenceService.getUserSockets(peerId)
+  io.in([...user1SocketIds, ...user2SocketIds]).socketsJoin(`chat:${chat.id}`)
+
+  io.to(`chat:${chat.id}`).emit(SOCKET_EVENTS.MESSAGE_NEW, {
     message,
     chat,
     content: message.content,
