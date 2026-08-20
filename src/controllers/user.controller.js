@@ -21,11 +21,20 @@ exports.getUsers = async (req, res) => {
     filter.role = req.query.role
   }
 
-  const { users, total } = await userService.findAll({ skip, limit })
+  const { users, hasNextPage } = await userService.findAll({ skip, limit })
 
-  const paginatedData = pagination.createPaginatedResponse(users, total, page, limit)
-
-  res.status(StatusCodes.OK).json(new ApiResponse('Users fetched successfully', paginatedData))
+  res.status(StatusCodes.OK).json(
+    new ApiResponse('Users fetched successfully', {
+      data: users,
+      pagination: {
+        page,
+        limit,
+        hasNextPage,
+        hasPrevPage: page > 1,
+        total: users.length,
+      },
+    })
+  )
 }
 
 exports.getUserById = async (req, res) => {

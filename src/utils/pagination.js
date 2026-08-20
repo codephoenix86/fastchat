@@ -4,6 +4,9 @@
  * @returns {Object} - { page, limit, skip, sort }
  */
 exports.parsePaginationParams = (query) => {
+  if (!query.page || !query.limit) {
+    return {}
+  }
   const page = Math.max(1, parseInt(query.page) || 1)
   const limit = Math.min(100, Math.max(1, parseInt(query.limit) || 20))
   const skip = (page - 1) * limit
@@ -58,6 +61,9 @@ exports.parseFilterParams = (query, allowedFilters = []) => {
  * @returns {Object} - Standardized paginated response
  */
 exports.createPaginatedResponse = (data, total, page, limit) => {
+  if (!page || !limit) {
+    return data
+  }
   const totalPages = Math.ceil(total / limit)
 
   return {

@@ -122,10 +122,9 @@ class UserRepository {
   }
 
   async findAll(options = {}) {
-    const { skip = 0, limit = 20 } = options
     const users = await prisma.user.findMany({
-      skip: skip,
-      take: limit,
+      skip: options.skip,
+      take: options.limit,
       orderBy: {
         created_at: 'desc',
       },
@@ -302,6 +301,38 @@ class UserRepository {
       bio: user.profile.bio || undefined,
       avatar: user.profile.avatar || undefined,
       lastSeen: user.profile?.last_seen || undefined,
+    }
+  }
+  async updateLastSeen(userId) {
+    const updatedUser = await prisma.user.update({
+      where: {
+        id: userId,
+      },
+      data: {
+        profile: {
+          update: {
+            last_seen: new Date(),
+          },
+        },
+      },
+      select: {
+        id: true,
+        username: true,
+        profile: {
+          select: {
+            bio: true,
+            avatar: true,
+            last_seen: true,
+          },
+        },
+      },
+    })
+    return {
+      id: updatedUser.id,
+      username: updatedUser.username,
+      bio: updatedUser.profile.bio || undefined,
+      avatar: updatedUser.profile.avatar || undefined,
+      lastSeen: updatedUser.last_seen || undefined,
     }
   }
 }
