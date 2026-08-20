@@ -75,8 +75,8 @@ exports.sendDirectMessage = async (req, res) => {
   )
 
   io.to(`user:${peerId}`).emit(SOCKET_EVENTS.MESSAGE_NEW, {
-    message: message,
-    chat: message.chat,
+    message,
+    chat,
     content: message.content,
     createdAt: message.createdAt,
   })
