@@ -19,24 +19,22 @@ exports.createChat = async (req, res) => {
 }
 
 exports.getChats = async (req, res) => {
-  const { page, limit, skip, sort } = pagination.parsePaginationParams(req.query)
+  const { page, limit, skip } = pagination.parsePaginationParams(req.query)
 
-  // Build filter
-  const filter = {}
-  if (req.query.type) {
-    filter.type = req.query.type
-  }
+  const { chats, hasNextPage } = await chatService.getUserChats(req.user.id, { skip, limit })
 
-  const { chats, total } = await chatService.getUserChats(req.user.id, {
-    filter,
-    skip,
-    limit,
-    sort,
-  })
-
-  const paginatedData = pagination.createPaginatedResponse(chats, total, page, limit)
-
-  res.status(StatusCodes.OK).json(new ApiResponse('Chats fetched successfully', paginatedData))
+  res.status(StatusCodes.OK).json(
+    new ApiResponse('Chats fetched successfully', {
+      data: chats,
+      pagination: {
+        page,
+        limit,
+        hasNextPage,
+        hasPrevPage: page > 1,
+        total: chats.length,
+      },
+    })
+  )
 }
 
 exports.getChatById = async (req, res) => {

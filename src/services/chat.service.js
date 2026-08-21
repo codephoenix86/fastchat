@@ -51,11 +51,20 @@ class ChatService {
       throw new NotFoundError('User not found')
     }
 
-    const chats = await chatRepository.getUserChats(userId, options)
+    const { skip, limit } = options
 
+    const chats = await chatRepository.getUserChats(userId, {
+      skip,
+      limit: limit ? limit + 1 : undefined,
+    })
+
+    const hasNextPage = chats.length > limit
+    if (hasNextPage) {
+      chats.pop()
+    }
     return {
       chats,
-      total: chats.length,
+      hasNextPage,
     }
   }
 

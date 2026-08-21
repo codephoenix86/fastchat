@@ -266,7 +266,7 @@ class ChatRepository {
   }
 
   async getUserChats(userId, options = {}) {
-    const { skip = 0, limit = 20 } = options
+    const { skip, limit } = options
     const chats = await Chat.find({ 'participants.user': userId })
       .sort({ createdAt: -1 })
       .skip(skip)

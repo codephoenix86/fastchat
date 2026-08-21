@@ -47,6 +47,10 @@ class MessageService {
 
     const messages = await messageRepository.getChatMessages(chat.id, options)
 
+    if (!messages) {
+      throw new NotFoundError('Messages not found')
+    }
+
     return { total: messages.length, messages }
   }
 
