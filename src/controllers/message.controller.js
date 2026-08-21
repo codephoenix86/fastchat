@@ -29,17 +29,25 @@ exports.sendMessage = async (req, res) => {
 
 exports.getMessages = async (req, res) => {
   const { chatId } = req.params
-  const { page, limit, skip, sort } = pagination.parsePaginationParams(req.query)
+  const { page, limit, skip } = pagination.parsePaginationParams(req.query)
 
-  const { messages, total } = await messageService.getChatMessages(chatId, req.user.id, {
+  const { messages, hasNextPage } = await messageService.getChatMessages(chatId, req.user.id, {
     skip,
     limit,
-    sort,
   })
 
-  const paginatedData = pagination.createPaginatedResponse(messages, total, page, limit)
-
-  res.status(StatusCodes.OK).json(new ApiResponse('Messages fetched successfully', paginatedData))
+  res.status(StatusCodes.OK).json(
+    new ApiResponse('Messages fetched successfully', {
+      data: messages,
+      pagination: {
+        page,
+        limit,
+        hasNextPage,
+        hasPrevPage: page > 1,
+        total: messages.length,
+      },
+    })
+  )
 }
 
 exports.getMessageById = async (req, res) => {

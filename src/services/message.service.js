@@ -42,16 +42,27 @@ class MessageService {
   }
 
   async getChatMessages(chatId, userId, options = {}) {
-    // Verify chat exists and user is a participant
     const chat = await chatService.getChatById(chatId, userId)
 
-    const messages = await messageRepository.getChatMessages(chat.id, options)
+    const { skip, limit } = options
+    const messages = await messageRepository.getChatMessages(chat.id, {
+      skip,
+      limit: limit ? limit + 1 : undefined,
+    })
 
     if (!messages) {
       throw new NotFoundError('Messages not found')
     }
 
-    return { total: messages.length, messages }
+    const hasNextPage = messages.length > limit
+    if (hasNextPage) {
+      messages.pop()
+    }
+    messages.reverse()
+    return {
+      messages,
+      hasNextPage,
+    }
   }
 
   async getMessageById(messageId, userId) {

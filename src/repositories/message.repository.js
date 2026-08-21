@@ -97,9 +97,9 @@ class MessageRepository {
   }
 
   async getChatMessages(chatId, options = {}) {
-    const { skip = 0, limit = 50 } = options
+    const { skip, limit } = options
     const messages = await Message.find({ chat: chatId })
-      .sort({ createdAt: 1 })
+      .sort({ createdAt: -1 })
       .skip(skip)
       .limit(limit)
       .lean()
