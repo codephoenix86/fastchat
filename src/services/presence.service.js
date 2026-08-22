@@ -6,6 +6,9 @@ class PresenceService {
     const key = `online:${userId}`
     await client.sadd(key, socketId)
     const count = await client.scard(key)
+    if (count === 1) {
+      await client.sadd('online_users', userId)
+    }
     return count === 1 // isFirstConnection
   }
 
@@ -13,6 +16,9 @@ class PresenceService {
     const key = `online:${userId}`
     const count = await client.scard(key)
     await client.srem(key, socketId)
+    if (count === 1) {
+      await client.srem('online_users', userId)
+    }
     return count === 1 // isLastConnection
   }
   async getUserSockets(userId) {
@@ -21,9 +27,12 @@ class PresenceService {
     return sockets
   }
   async isUserOnline(userId) {
-    const key = `online:${userId}`
-    const result = await client.exists(key)
-    return result
+    const status = await client.sismember('online_users', userId)
+    return status
+  }
+  async areUsersOnline(userIds) {
+    const statuses = await client.smismember('online_users', ...userIds)
+    return statuses
   }
   getOnlineUsers() {
     const users = []

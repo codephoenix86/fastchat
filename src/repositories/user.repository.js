@@ -327,12 +327,15 @@ class UserRepository {
         },
       },
     })
+    if (!updatedUser) {
+      return null
+    }
     return {
       id: updatedUser.id,
       username: updatedUser.username,
       bio: updatedUser.profile.bio || undefined,
       avatar: updatedUser.profile.avatar || undefined,
-      lastSeen: updatedUser.last_seen || undefined,
+      lastSeen: updatedUser.profile.last_seen || undefined,
     }
   }
 }

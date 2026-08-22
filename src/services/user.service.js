@@ -135,6 +135,14 @@ class UserService {
 
     logger.info('Password changed', { userId })
   }
+
+  async updateLastSeen(userId) {
+    const updatedUser = await userRepository.updateLastSeen(userId)
+    if (!updatedUser) {
+      throw new NotFoundError('User not found')
+    }
+    return updatedUser
+  }
 }
 
 module.exports = new UserService()

@@ -1,4 +1,4 @@
-const { userService } = require('@services')
+const { userService, presenceService } = require('@services')
 const { ApiResponse, pagination } = require('@utils')
 const { StatusCodes } = require('http-status-codes')
 const { ValidationError } = require('@errors')
@@ -15,17 +15,12 @@ const { ValidationError } = require('@errors')
 exports.getUsers = async (req, res) => {
   const { page, limit, skip } = pagination.parsePaginationParams(req.query)
 
-  // Build filter
-  const filter = {}
-  if (req.query.role) {
-    filter.role = req.query.role
-  }
-
   const { users, hasNextPage } = await userService.findAll({ skip, limit })
+  const statuses = await presenceService.areUsersOnline(users.map((user) => user.id))
 
   res.status(StatusCodes.OK).json(
     new ApiResponse('Users fetched successfully', {
-      data: users,
+      data: users.map((user, i) => ({ ...user, isOnline: statuses[i] === 1 })),
       pagination: {
         page,
         limit,

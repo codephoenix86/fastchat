@@ -1,5 +1,5 @@
 const { Server } = require('socket.io')
-const { presenceService, chatService } = require('@services')
+const { presenceService, chatService, userService } = require('@services')
 const { env, logger } = require('@config')
 const { SOCKET_EVENTS } = require('@constants')
 const { authMiddleware } = require('./middlewares')
@@ -38,7 +38,7 @@ const init = (server) => {
 
     const isFirstConnection = await presenceService.addSocket(userId, socketId)
     if (isFirstConnection) {
-      socket.broadcast.emit(SOCKET_EVENTS.USER_ONLINE, { userId })
+      socket.broadcast.emit(SOCKET_EVENTS.USER_ONLINE, { userId, timestamp: new Date() })
       logger.debug('User came online', { userId })
     }
 
@@ -47,8 +47,12 @@ const init = (server) => {
 
       const isLastConnection = await presenceService.removeSocket(userId, socketId)
       if (isLastConnection) {
-        socket.broadcast.emit(SOCKET_EVENTS.USER_OFFLINE, { userId })
         logger.debug('User went offline', { userId })
+        const updatedUser = await userService.updateLastSeen(userId)
+        socket.broadcast.emit(SOCKET_EVENTS.USER_OFFLINE, {
+          userId,
+          lastSeen: updatedUser.lastSeen,
+        })
       }
     })
   })
