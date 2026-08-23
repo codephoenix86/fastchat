@@ -1,7 +1,6 @@
-const { userService, presenceService } = require('@services')
+const { userService, presenceService, storageService } = require('@services')
 const { ApiResponse, pagination } = require('@utils')
 const { StatusCodes } = require('http-status-codes')
-const { ValidationError } = require('@errors')
 
 /**
  * Get all users with pagination, filtering, and search
@@ -57,14 +56,14 @@ exports.deleteCurrentUser = async (req, res) => {
   res.status(StatusCodes.OK).json(new ApiResponse('Account deleted successfully', { user }))
 }
 
+exports.getAvatarUploadSignature = async (req, res) => {
+  const data = await storageService.generateUploadSignature(req.user.id)
+  res.status(StatusCodes.OK).json(new ApiResponse('Upload signature generated successfully', data))
+}
+
 exports.uploadAvatar = async (req, res) => {
-  // Check if file was uploaded
-  if (!req.file) {
-    throw new ValidationError('Please upload an image file')
-  }
-
-  const user = await userService.updateAvatar(req.user.id, req.file)
-
+  const { url } = req.body
+  const user = await userService.updateAvatar(req.user.id, url)
   res.status(StatusCodes.OK).json(new ApiResponse('Avatar uploaded successfully', { user }))
 }
 

@@ -273,9 +273,11 @@ class ChatRepository {
       .limit(limit)
       .populate('lastMessage')
       .lean()
+
     if (!chats) {
       return null
     }
+
     await this._populateParticipants(chats)
     chats.forEach((chat) => {
       const lastMessage = chat.lastMessage

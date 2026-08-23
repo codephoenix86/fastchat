@@ -58,6 +58,9 @@ class ChatService {
       limit: limit ? limit + 1 : undefined,
     })
 
+    if (chats.length === 0) {
+      throw new NotFoundError('Chats not found')
+    }
     const hasNextPage = chats.length > limit
     if (hasNextPage) {
       chats.pop()

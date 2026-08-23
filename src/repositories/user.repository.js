@@ -221,6 +221,9 @@ class UserRepository {
           },
         },
       })
+      if (!updatedUser) {
+        return null
+      }
       return {
         id: updatedUser.id,
         username: updatedUser.username,
@@ -252,6 +255,9 @@ class UserRepository {
           id: userId,
         },
       })
+      if (!deletedUser) {
+        return null
+      }
       return {
         id: deletedUser.id,
         username: deletedUser.username,
@@ -366,6 +372,42 @@ class UserRepository {
       avatar: user.profile.avatar || undefined,
       lastSeen: user.profile.last_seen || undefined,
     }))
+  }
+
+  async uploadAvatar(userId, url) {
+    const updatedUser = await prisma.user.update({
+      where: {
+        id: userId,
+      },
+      data: {
+        profile: {
+          update: {
+            avatar: url,
+          },
+        },
+      },
+      select: {
+        id: true,
+        username: true,
+        profile: {
+          select: {
+            bio: true,
+            avatar: true,
+            last_seen: true,
+          },
+        },
+      },
+    })
+    if (!updatedUser) {
+      return null
+    }
+    return {
+      id: updatedUser.id,
+      username: updatedUser.username,
+      bio: updatedUser.profile.bio || undefined,
+      avatar: updatedUser.profile.avatar || undefined,
+      lastSeen: updatedUser.profile.last_seen || undefined,
+    }
   }
 }
 

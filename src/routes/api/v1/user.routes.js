@@ -24,6 +24,8 @@ router
   .post(upload.single('avatar'), asyncHandler(userControllers.uploadAvatar))
   .delete(asyncHandler(userControllers.deleteAvatar))
 
+router.get('/me/avatar/signature', asyncHandler(userControllers.getAvatarUploadSignature))
+
 // Password management
 router.patch(
   '/me/password',

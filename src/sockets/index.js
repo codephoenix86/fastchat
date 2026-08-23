@@ -29,8 +29,16 @@ const init = (server) => {
 
     socket.join(`user:${userId}`)
 
-    const { chats } = await chatService.getUserChats(userId)
-    chats.forEach((chat) => socket.join(`chat:${chat.id}`))
+    try {
+      const { chats } = await chatService.getUserChats(userId)
+      chats.forEach((chat) => socket.join(`chat:${chat.id}`))
+    } catch (err) {
+      if (err.name === 'NotFoundError') {
+        logger.debug('No chats found to join on connect', { userId })
+      } else {
+        logger.warn('Failed to join user chats', { userId, err: err.message })
+      }
+    }
 
     registerChatHandlers(io, socket)
     registerMessageHandlers(io, socket)

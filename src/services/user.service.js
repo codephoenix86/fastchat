@@ -33,8 +33,8 @@ class UserService {
       })
     }
 
-    if (!users) {
-      throw NotFoundError('Users not found')
+    if (users.length === 0) {
+      throw new NotFoundError('Users not found')
     }
 
     const hasNextPage = query ? false : users.length > limit
@@ -98,30 +98,12 @@ class UserService {
     return updatedUser
   }
 
-  async updateAvatar(userId, file) {
-    const user = await userRepository.findById(userId)
-    if (!user) {
+  async updateAvatar(userId, url) {
+    const updatedUser = await userRepository.uploadAvatar(userId, url)
+    if (!updatedUser) {
       throw new NotFoundError('User not found')
     }
-
-    if (user.avatar) {
-      try {
-        await s3Service.deleteFile(user.avatar)
-      } catch (err) {
-        // Non-fatal: old avatar cleanup failure should not block the upload.
-        logger.warn('Failed to delete old avatar from storage', { userId, err })
-      }
-    }
-
-    const filename = `${userId}-${Date.now()}`
-    try {
-      const url = await s3Service.uploadFile(file.buffer, filename, file.mimetype)
-      const updated = await userRepository.updateById(userId, { avatar: url })
-      return updated
-    } catch (err) {
-      logger.warn('Failed to upload avatar', { userId, err })
-      throw err
-    }
+    return updatedUser
   }
 
   async changePassword(userId, currentPassword, newPassword) {

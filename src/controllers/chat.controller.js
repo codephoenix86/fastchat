@@ -1,4 +1,4 @@
-const { chatService } = require('@services')
+const { chatService, presenceService } = require('@services')
 const { ApiResponse, pagination } = require('@utils')
 const { StatusCodes } = require('http-status-codes')
 const { CHAT_TYPES } = require('@constants')
@@ -22,7 +22,17 @@ exports.getChats = async (req, res) => {
   const { page, limit, skip } = pagination.parsePaginationParams(req.query)
 
   const { chats, hasNextPage } = await chatService.getUserChats(req.user.id, { skip, limit })
-
+  const uniqueParticipantIds = new Set()
+  chats.forEach((chat) => chat.participants.forEach((p) => uniqueParticipantIds.add(p.user.id)))
+  const uniqueParticipantIdArr = Array.from(uniqueParticipantIds)
+  const statuses = await presenceService.areUsersOnline(uniqueParticipantIdArr)
+  const statusMap = {}
+  uniqueParticipantIdArr.forEach((p, i) => (statusMap[p] = statuses[i]))
+  chats.forEach((chat) => {
+    chat.participants = chat.participants.map((p) => {
+      return { ...p, isOnline: statusMap[p.user.id] }
+    })
+  })
   res.status(StatusCodes.OK).json(
     new ApiResponse('Chats fetched successfully', {
       data: chats,
