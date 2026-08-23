@@ -58,4 +58,12 @@ const getUserById = Joi.object({
   }),
 })
 
-module.exports = { updateCurrentUser, changePassword, getUserById }
+const getUsers = Joi.object({
+  query: Joi.object({
+    page: Joi.number().integer().min(1),
+    limit: Joi.number().integer().min(1).max(100),
+    q: Joi.string().trim().min(1).max(50),
+  }).and('page', 'limit'),
+})
+
+module.exports = { updateCurrentUser, changePassword, getUserById, getUsers }

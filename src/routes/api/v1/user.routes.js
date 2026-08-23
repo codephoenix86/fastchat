@@ -7,7 +7,7 @@ const { asyncHandler } = require('@utils')
 const router = express.Router()
 
 // Public routes
-router.get('/', asyncHandler(userControllers.getUsers))
+router.get('/', validate(userSchema.getUsers), asyncHandler(userControllers.getUsers))
 
 // Protected routes - Current user
 router.use('/me', asyncHandler(protect.accessToken))

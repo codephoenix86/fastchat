@@ -14,8 +14,8 @@ const { ValidationError } = require('@errors')
  */
 exports.getUsers = async (req, res) => {
   const { page, limit, skip } = pagination.parsePaginationParams(req.query)
-
-  const { users, hasNextPage } = await userService.findAll({ skip, limit })
+  const { q } = req.query
+  const { users, hasNextPage } = await userService.findAll({ skip, limit, query: q })
   const statuses = await presenceService.areUsersOnline(users.map((user) => user.id))
 
   res.status(StatusCodes.OK).json(

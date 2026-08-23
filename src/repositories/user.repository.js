@@ -338,6 +338,35 @@ class UserRepository {
       lastSeen: updatedUser.profile.last_seen || undefined,
     }
   }
+  async search(query) {
+    const users = await prisma.user.findMany({
+      where: {
+        username: {
+          contains: query,
+          mode: 'insensitive',
+        },
+      },
+      take: 50,
+      select: {
+        id: true,
+        username: true,
+        profile: {
+          select: {
+            bio: true,
+            avatar: true,
+            last_seen: true,
+          },
+        },
+      },
+    })
+    return users.map((user) => ({
+      id: user.id,
+      username: user.username,
+      bio: user.profile.bio || undefined,
+      avatar: user.profile.avatar || undefined,
+      lastSeen: user.profile.last_seen || undefined,
+    }))
+  }
 }
 
 module.exports = new UserRepository()

@@ -14,7 +14,7 @@ router.use(asyncHandler(protect.accessToken))
 // Main chat resource - Full CRUD
 router
   .route('/')
-  .get(asyncHandler(chatControllers.getChats))
+  .get(validate(chatSchema.getUserChats), asyncHandler(chatControllers.getChats))
   // Accepts: ?page=1&limit=20&type=group&sort=-createdAt
   .post(validate(chatSchema.createChat), asyncHandler(chatControllers.createChat))
 

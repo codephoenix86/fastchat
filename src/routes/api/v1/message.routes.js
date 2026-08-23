@@ -14,7 +14,7 @@ router.use(asyncHandler(protect.accessToken))
 
 router
   .route('/')
-  .get(asyncHandler(messageControllers.getMessages))
+  .get(validate(messageSchema.getMessages), asyncHandler(messageControllers.getMessages))
   .post(validate(messageSchema.sendMessage), asyncHandler(messageControllers.sendMessage))
 router
   .route('/:messageId')

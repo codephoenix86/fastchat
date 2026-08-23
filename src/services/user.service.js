@@ -21,17 +21,23 @@ class UserService {
   }
 
   async findAll(options = {}) {
-    const { skip, limit } = options
-    const users = await userRepository.findAll({
-      skip,
-      limit: limit ? limit + 1 : undefined,
-    })
+    const { skip, limit, query } = options
+
+    let users
+    if (query) {
+      users = await userRepository.search(query)
+    } else {
+      users = await userRepository.findAll({
+        skip,
+        limit: limit ? limit + 1 : undefined,
+      })
+    }
 
     if (!users) {
       throw NotFoundError('Users not found')
     }
 
-    const hasNextPage = users.length > limit
+    const hasNextPage = query ? false : users.length > limit
     if (hasNextPage) {
       users.pop()
     }
