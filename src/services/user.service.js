@@ -82,19 +82,10 @@ class UserService {
   }
 
   async deleteAvatar(userId) {
-    const user = await userRepository.findById(userId)
-    if (!user) {
+    const updatedUser = await userRepository.deleteAvatar(userId)
+    if (!updatedUser) {
       throw new NotFoundError('User not found')
     }
-    if (user.avatar) {
-      try {
-        await s3Service.deleteFile(user.avatar)
-      } catch (err) {
-        logger.warn('Failed to delete avatar from storage', { userId, err })
-        throw err
-      }
-    }
-    const updatedUser = await userRepository.deleteAvatar(userId)
     return updatedUser
   }
 

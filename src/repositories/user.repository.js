@@ -65,6 +65,7 @@ class UserRepository {
       select: {
         id: true,
         username: true,
+        email: true,
         ...(isIncludePassword && { password_hash: true }),
         profile: {
           select: {
