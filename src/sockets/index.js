@@ -25,7 +25,26 @@ const init = (server) => {
     const { userId } = socket
     const socketId = socket.id
 
+    socket.on(SOCKET_EVENTS.DISCONNECT, async (reason) => {
+      logger.info('Socket disconnected', { socketId, userId, reason })
+      const isLastConnection = await presenceService.removeSocket(userId, socketId)
+      if (isLastConnection) {
+        logger.debug('User went offline', { userId })
+        const updatedUser = await userService.updateLastSeen(userId)
+        socket.broadcast.emit(SOCKET_EVENTS.USER_OFFLINE, {
+          userId,
+          lastSeen: updatedUser.lastSeen,
+        })
+      }
+    })
+
     logger.info('Socket connected', { socketId, userId })
+
+    const isFirstConnection = await presenceService.addSocket(userId, socketId)
+    if (isFirstConnection) {
+      socket.broadcast.emit(SOCKET_EVENTS.USER_ONLINE, { userId, timestamp: new Date() })
+      logger.debug('User came online', { userId })
+    }
 
     socket.join(`user:${userId}`)
 
@@ -43,26 +62,6 @@ const init = (server) => {
     registerChatHandlers(io, socket)
     registerMessageHandlers(io, socket)
     registerTypingHandlers(io, socket)
-
-    const isFirstConnection = await presenceService.addSocket(userId, socketId)
-    if (isFirstConnection) {
-      socket.broadcast.emit(SOCKET_EVENTS.USER_ONLINE, { userId, timestamp: new Date() })
-      logger.debug('User came online', { userId })
-    }
-
-    socket.on(SOCKET_EVENTS.DISCONNECT, async (reason) => {
-      logger.info('Socket disconnected', { socketId, userId, reason })
-
-      const isLastConnection = await presenceService.removeSocket(userId, socketId)
-      if (isLastConnection) {
-        logger.debug('User went offline', { userId })
-        const updatedUser = await userService.updateLastSeen(userId)
-        socket.broadcast.emit(SOCKET_EVENTS.USER_OFFLINE, {
-          userId,
-          lastSeen: updatedUser.lastSeen,
-        })
-      }
-    })
   })
 
   logger.info('Socket.io server initialized')
