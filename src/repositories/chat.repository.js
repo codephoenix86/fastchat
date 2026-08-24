@@ -438,6 +438,59 @@ class ChatRepository {
       lastReadSequence: updatedChat.lastReadSequence,
     }
   }
+  async clear(chatId, userId) {
+    const updatedChat = await Chat.findOneAndUpdate(
+      { _id: chatId, 'participants.user': userId },
+      [
+        {
+          $set: {
+            participants: {
+              $map: {
+                input: '$participants',
+                as: 'p',
+                in: {
+                  $cond: {
+                    if: { $eq: ['$$p.user', userId] },
+                    then: {
+                      $mergeObjects: [
+                        '$$p',
+                        { latestSequence: '$lastReadSequence', lastClear: new Date() },
+                      ],
+                    },
+                    // Leave other participants unchanged
+                    else: '$$p',
+                  },
+                },
+              },
+            },
+          },
+        },
+      ],
+      { new: true }
+    )
+
+    const lastMessage = updatedChat.lastMessage
+    if (lastMessage) {
+      updatedChat.lastMessage = {
+        id: lastMessage._id,
+        content: lastMessage.content,
+        status: lastMessage.status,
+        sender: lastMessage.sender,
+        createdAt: lastMessage.createdAt,
+      }
+    }
+    await this._populateParticipants([updatedChat])
+    return {
+      id: updatedChat._id,
+      type: updatedChat.type,
+      groupName: updatedChat.groupName || undefined,
+      groupPicture: updatedChat.groupPicture || undefined,
+      participants: updatedChat.participants,
+      admin: updatedChat.admin || undefined,
+      lastMessage: updatedChat.lastMessage || undefined,
+      lastReadSequence: updatedChat.lastReadSequence,
+    }
+  }
 }
 
 module.exports = new ChatRepository()

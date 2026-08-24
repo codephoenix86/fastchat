@@ -10,6 +10,10 @@ const participantSchema = new mongoose.Schema(
       required: true,
       default: 0,
     },
+    lastClear: {
+      type: Date,
+      default: Date.now,
+    },
   },
   { _id: false }
 )

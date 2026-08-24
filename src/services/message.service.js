@@ -42,10 +42,8 @@ class MessageService {
   }
 
   async getChatMessages(chatId, userId, options = {}) {
-    const chat = await chatService.getChatById(chatId, userId)
-
     const { skip, limit } = options
-    const messages = await messageRepository.getChatMessages(chat.id, {
+    const messages = await messageRepository.getChatMessages(chatId, userId, {
       skip,
       limit: limit ? limit + 1 : undefined,
     })

@@ -1,6 +1,7 @@
 const { Message } = require('@models')
 const { MESSAGE_STATUS } = require('@constants')
 const userRepository = require('./user.repository')
+const chatRepository = require('./chat.repository')
 
 class MessageRepository {
   async _populateMessages(messages) {
@@ -96,9 +97,11 @@ class MessageRepository {
     }
   }
 
-  async getChatMessages(chatId, options = {}) {
+  async getChatMessages(chatId, userId, options = {}) {
     const { skip, limit } = options
-    const messages = await Message.find({ chat: chatId })
+    const chat = await chatRepository.findById(chatId)
+    const lastClear = chat.participants.find((p) => p.user.id === userId).lastClear
+    const messages = await Message.find({ chat: chatId, createdAt: { $gt: lastClear } })
       .sort({ createdAt: -1 })
       .skip(skip)
       .limit(limit)

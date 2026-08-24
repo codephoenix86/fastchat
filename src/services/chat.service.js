@@ -257,6 +257,14 @@ class ChatService {
     const updatedChat = await chatRepository.markAsRead(chatId, userId, sequenceId)
     return updatedChat
   }
+
+  async clear(chatId, userId) {
+    const updatedChat = await chatRepository.clear(chatId, userId)
+    if (!updatedChat) {
+      throw new NotFoundError('Chat not found')
+    }
+    return updatedChat
+  }
 }
 
 module.exports = new ChatService()

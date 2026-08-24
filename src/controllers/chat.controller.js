@@ -106,3 +106,11 @@ exports.markAsRead = async (req, res) => {
     .status(StatusCodes.OK)
     .json(new ApiResponse('User marked as read successfully', { chat: updatedChat }))
 }
+
+exports.clearChat = async (req, res) => {
+  const { chatId } = req.params
+  const updatedChat = await chatService.clear(chatId, req.user.id)
+  res
+    .status(StatusCodes.OK)
+    .json(new ApiResponse('Chat cleared successfully', { chat: updatedChat }))
+}

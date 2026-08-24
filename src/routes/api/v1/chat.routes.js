@@ -55,6 +55,7 @@ router.patch(
   asyncHandler(chatControllers.markAsRead)
 )
 
+router.delete('/:chatId/messages', asyncHandler(chatControllers.clearChat))
 // Nested message routes
 router.use('/:chatId/messages', messageRouter)
 
