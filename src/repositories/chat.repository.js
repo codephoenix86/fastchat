@@ -160,7 +160,7 @@ class ChatRepository {
   async addMember(chatId, userId) {
     const updatedChat = await Chat.findByIdAndUpdate(
       chatId,
-      { $addToSet: { participants: userId } },
+      { $addToSet: { participants: { user: userId } } },
       { new: true }
     )
       .populate('lastMessage')
@@ -194,7 +194,7 @@ class ChatRepository {
   async removeMember(chatId, userId) {
     const updatedChat = await Chat.findByIdAndUpdate(
       chatId,
-      { $pull: { participants: userId } },
+      { $pull: { participants: { user: userId } } },
       { new: true }
     )
       .populate('lastMessage')
