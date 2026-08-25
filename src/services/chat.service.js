@@ -265,6 +265,14 @@ class ChatService {
     }
     return updatedChat
   }
+
+  async uploadGroupPicture(chatId, url) {
+    const updatedChat = await chatRepository.uploadGroupPicture(chatId, url)
+    if (!updatedChat) {
+      throw new NotFoundError('Chat not found')
+    }
+    return updatedChat
+  }
 }
 
 module.exports = new ChatService()

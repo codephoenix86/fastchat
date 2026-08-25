@@ -7,9 +7,15 @@ cloudinary.config({
 })
 
 class StorageService {
-  generateUploadSignature(userId) {
+  generateUploadSignature(id, type) {
     const timestamp = Math.round(new Date().getTime() / 1000)
-    const publicId = `user-avatar-${userId}`
+    let publicId
+    if (type === 'user') {
+      publicId = `user-avatar-${id}`
+    }
+    if (type === 'chat') {
+      publicId = `chat-avatar-${id}`
+    }
     const paramsToSign = {
       timestamp,
       upload_preset: 'secure_avatars',

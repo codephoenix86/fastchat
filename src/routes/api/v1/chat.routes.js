@@ -31,6 +31,10 @@ router.get(
   asyncHandler(chatControllers.getMembers)
 )
 
+router.get('/:chatId/picture/signature', asyncHandler(chatControllers.getUploadSignature))
+
+router.post('/:chatId/picture', asyncHandler(chatControllers.uploadPicture))
+
 router.post(
   '/:chatId/members/:userId',
   validate(chatSchema.addMember),

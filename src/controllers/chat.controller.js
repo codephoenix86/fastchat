@@ -1,4 +1,4 @@
-const { chatService, presenceService } = require('@services')
+const { chatService, presenceService, storageService } = require('@services')
 const { ApiResponse, pagination } = require('@utils')
 const { StatusCodes } = require('http-status-codes')
 const { CHAT_TYPES } = require('@constants')
@@ -80,6 +80,18 @@ exports.addMember = async (req, res) => {
 exports.removeSelf = async (req, res) => {
   const updatedChat = await chatService.removeMember(req.params.chatId, req.user.id, req.user.id)
   res.status(StatusCodes.OK).json(new ApiResponse('Member removed successfully', updatedChat))
+}
+
+exports.getUploadSignature = async (req, res) => {
+  const { chatId } = req.params
+  const data = await storageService.generateUploadSignature(chatId, 'chat')
+  res.status(StatusCodes.OK).json(new ApiResponse('Upload signature generated successfully', data))
+}
+
+exports.uploadPicture = async (req, res) => {
+  const { url } = req.body
+  const chat = await chatService.uploadGroupPicture(req.params.chatId, url)
+  res.status(StatusCodes.OK).json(new ApiResponse('Group picture uploaded successfully', { chat }))
 }
 
 exports.removeMember = async (req, res) => {

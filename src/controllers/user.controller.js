@@ -57,7 +57,7 @@ exports.deleteCurrentUser = async (req, res) => {
 }
 
 exports.getAvatarUploadSignature = async (req, res) => {
-  const data = await storageService.generateUploadSignature(req.user.id)
+  const data = await storageService.generateUploadSignature(req.user.id, 'user')
   res.status(StatusCodes.OK).json(new ApiResponse('Upload signature generated successfully', data))
 }
 

@@ -491,6 +491,30 @@ class ChatRepository {
       lastReadSequence: updatedChat.lastReadSequence,
     }
   }
+  async uploadGroupPicture(chatId, url) {
+    const updatedChat = await Chat.findByIdAndUpdate(chatId, { groupPicture: url }, { new: true })
+    const lastMessage = updatedChat.lastMessage
+    if (lastMessage) {
+      updatedChat.lastMessage = {
+        id: lastMessage._id,
+        content: lastMessage.content,
+        status: lastMessage.status,
+        sender: lastMessage.sender,
+        createdAt: lastMessage.createdAt,
+      }
+    }
+    await this._populateParticipants([updatedChat])
+    return {
+      id: updatedChat._id,
+      type: updatedChat.type,
+      groupName: updatedChat.groupName || undefined,
+      groupPicture: updatedChat.groupPicture || undefined,
+      participants: updatedChat.participants,
+      admin: updatedChat.admin || undefined,
+      lastMessage: updatedChat.lastMessage || undefined,
+      lastReadSequence: updatedChat.lastReadSequence,
+    }
+  }
 }
 
 module.exports = new ChatRepository()
