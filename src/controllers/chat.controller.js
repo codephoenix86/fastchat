@@ -91,7 +91,7 @@ exports.getUploadSignature = async (req, res) => {
 exports.uploadPicture = async (req, res) => {
   const { url } = req.body
   const chat = await chatService.uploadGroupPicture(req.params.chatId, url)
-  res.status(StatusCodes.OK).json(new ApiResponse('Group picture uploaded successfully', { chat }))
+  res.status(StatusCodes.OK).json(new ApiResponse('Group picture uploaded successfully', chat))
 }
 
 exports.removeMember = async (req, res) => {
