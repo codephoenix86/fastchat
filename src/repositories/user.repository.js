@@ -1,9 +1,10 @@
 const { PrismaClient, Prisma } = require('@prisma/client')
 const { PrismaPg } = require('@prisma/adapter-pg')
-const { postgres } = require('@config')
+const { postgres, redis } = require('@config')
 const { ConflictError } = require('@errors')
 
 const pool = postgres.getPool()
+const redisClient = redis.getClient()
 const adapter = new PrismaPg(pool)
 
 const prisma = new PrismaClient({ adapter })
@@ -178,6 +179,42 @@ class UserRepository {
     }))
   }
 
+  async getCachedProfiles(userIds) {
+    const uniqueIds = [...new Set(userIds)]
+    if (uniqueIds.length === 0) {
+      return []
+    }
+
+    const cacheKeys = uniqueIds.map((id) => `profile:${id}`)
+    const cachedData = await redisClient.mget(cacheKeys)
+
+    const profiles = []
+    const missingIds = []
+
+    cachedData.forEach((data, index) => {
+      if (data) {
+        profiles.push(JSON.parse(data))
+      } else {
+        missingIds.push(uniqueIds[index])
+      }
+    })
+
+    if (missingIds.length > 0) {
+      const dbProfiles = await this.findProfiles(missingIds)
+
+      if (dbProfiles.length > 0) {
+        const pipeline = redisClient.pipeline()
+        dbProfiles.forEach((profile) => {
+          pipeline.set(`profile:${profile.id}`, JSON.stringify(profile), 'EX', 3600) // 1 hour TTL
+          profiles.push(profile)
+        })
+        await pipeline.exec()
+      }
+    }
+
+    return profiles
+  }
+
   async updateById(userId, updateData) {
     const { username, password_hash, bio, avatar } = updateData
     const hasUserUpdate = username !== undefined || password_hash !== undefined
@@ -225,6 +262,10 @@ class UserRepository {
       if (!updatedUser) {
         return null
       }
+
+      // Invalidate cache
+      await redisClient.del(`profile:${updatedUser.id}`)
+
       return {
         id: updatedUser.id,
         username: updatedUser.username,
@@ -302,6 +343,9 @@ class UserRepository {
       return null
     }
 
+    // Invalidate cache
+    await redisClient.del(`profile:${user.id}`)
+
     return {
       id: user.id,
       username: user.username,
@@ -337,6 +381,10 @@ class UserRepository {
     if (!updatedUser) {
       return null
     }
+
+    // Invalidate cache
+    await redisClient.del(`profile:${updatedUser.id}`)
+
     return {
       id: updatedUser.id,
       username: updatedUser.username,
@@ -402,6 +450,10 @@ class UserRepository {
     if (!updatedUser) {
       return null
     }
+
+    // Invalidate cache
+    await redisClient.del(`profile:${updatedUser.id}`)
+
     return {
       id: updatedUser.id,
       username: updatedUser.username,

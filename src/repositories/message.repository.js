@@ -9,11 +9,11 @@ class MessageRepository {
     messages.forEach((message) => {
       userIds.add(message.sender)
     })
-    const profiles = await userRepository.findProfiles(Array.from(userIds))
+    const profiles = await userRepository.getCachedProfiles(Array.from(userIds))
     const users = {}
     profiles.forEach((profile) => (users[profile.id] = profile))
     messages.forEach((message) => {
-      message.sender = users[message.sender]
+      message.sender = users[message.sender] || message.sender
     })
     return messages
   }
@@ -100,7 +100,10 @@ class MessageRepository {
   async getChatMessages(chatId, userId, options = {}) {
     const { skip, limit } = options
     const chat = await chatRepository.findById(chatId)
-    const lastClear = chat.participants.find((p) => p.user.id === userId).lastClear
+    const lastClear = chat.participants.find((p) => p.user.id === userId)?.lastClear
+    if (!lastClear) {
+      return null
+    }
     const messages = await Message.find({ chat: chatId, createdAt: { $gt: lastClear } })
       .sort({ createdAt: -1 })
       .skip(skip)

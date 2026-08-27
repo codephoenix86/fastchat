@@ -17,15 +17,15 @@ class ChatRepository {
       }
     })
     const participants = {}
-    const profiles = await userRepository.findProfiles(Array.from(participantIds))
+    const profiles = await userRepository.getCachedProfiles(Array.from(participantIds))
     profiles.forEach((profile) => (participants[profile.id] = profile))
     chats.forEach((chat) => {
       chat.participants = chat.participants.map((participant) => ({
         ...participant,
-        user: participants[participant.user],
+        user: participants[participant.user] || participant.user,
       }))
       if (chat.admin) {
-        chat.admin = participants[chat.admin]
+        chat.admin = participants[chat.admin] || chat.admin
       }
     })
     return chats

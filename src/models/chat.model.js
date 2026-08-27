@@ -83,8 +83,8 @@ const schema = new mongoose.Schema(
 )
 
 // Indexes for performance
-schema.index({ participants: 1, createdAt: -1 })
-schema.index({ participants: 1, type: 1 })
+schema.index({ 'participants.user': 1, updatedAt: -1 })
+schema.index({ 'participants.user': 1, type: 1 })
 schema.index({ admin: 1 })
 
 // JSON transformation
