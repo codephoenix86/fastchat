@@ -98,17 +98,19 @@ class MessageRepository {
   }
 
   async getChatMessages(chatId, userId, options = {}) {
-    const { skip, limit } = options
+    const { cursor, limit = 50 } = options
     const chat = await chatRepository.findById(chatId)
     const lastClear = chat.participants.find((p) => p.user.id === userId)?.lastClear
     if (!lastClear) {
       return null
     }
-    const messages = await Message.find({ chat: chatId, createdAt: { $gt: lastClear } })
-      .sort({ createdAt: -1 })
-      .skip(skip)
-      .limit(limit)
-      .lean()
+
+    const query = { chat: chatId, createdAt: { $gt: lastClear } }
+    if (cursor) {
+      query.createdAt.$lt = new Date(cursor)
+    }
+
+    const messages = await Message.find(query).sort({ createdAt: -1 }).limit(limit).lean()
     if (!messages) {
       return null
     }

@@ -42,9 +42,9 @@ class MessageService {
   }
 
   async getChatMessages(chatId, userId, options = {}) {
-    const { skip, limit } = options
+    const { cursor, limit } = options
     const messages = await messageRepository.getChatMessages(chatId, userId, {
-      skip,
+      cursor,
       limit: limit ? limit + 1 : undefined,
     })
 
@@ -56,10 +56,17 @@ class MessageService {
     if (hasNextPage) {
       messages.pop()
     }
+
+    let nextCursor = null
+    if (messages.length > 0) {
+      nextCursor = messages[messages.length - 1].createdAt
+    }
+
     messages.reverse()
     return {
       messages,
       hasNextPage,
+      nextCursor,
     }
   }
 

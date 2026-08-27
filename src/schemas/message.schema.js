@@ -60,7 +60,8 @@ const getMessages = Joi.object({
   query: Joi.object({
     page: Joi.number().integer().min(1),
     limit: Joi.number().integer().min(1).max(100),
-  }).and('page', 'limit'),
+    cursor: Joi.string(),
+  }),
 })
 
 module.exports = { sendMessage, updateMessage, getMessageById, sendDirectMessage, getMessages }

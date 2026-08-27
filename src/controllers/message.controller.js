@@ -29,12 +29,17 @@ exports.sendMessage = async (req, res) => {
 
 exports.getMessages = async (req, res) => {
   const { chatId } = req.params
-  const { page, limit, skip } = pagination.parsePaginationParams(req.query)
+  const { page, limit } = pagination.parsePaginationParams(req.query)
+  const cursor = req.query.cursor
 
-  const { messages, hasNextPage } = await messageService.getChatMessages(chatId, req.user.id, {
-    skip,
-    limit,
-  })
+  const { messages, hasNextPage, nextCursor } = await messageService.getChatMessages(
+    chatId,
+    req.user.id,
+    {
+      cursor,
+      limit,
+    }
+  )
 
   res.status(StatusCodes.OK).json(
     new ApiResponse('Messages fetched successfully', {
@@ -45,6 +50,7 @@ exports.getMessages = async (req, res) => {
         hasNextPage,
         hasPrevPage: page > 1,
         total: messages.length,
+        nextCursor,
       },
     })
   )
