@@ -1,6 +1,7 @@
 const { Server } = require('socket.io')
 const { presenceService, chatService, userService } = require('@services')
-const { env, logger } = require('@config')
+const { createAdapter } = require('@socket.io/redis-adapter')
+const { redis, env, logger } = require('@config')
 const { SOCKET_EVENTS } = require('@constants')
 const { authMiddleware } = require('./middlewares')
 const {
@@ -12,12 +13,18 @@ const {
 let io = null
 const init = (server) => {
   const allowedOrigins = env.ALLOWED_ORIGINS.split(',')
+
+  // Create dedicated Redis clients for Pub/Sub
+  const pubClient = redis.getClient().duplicate()
+  const subClient = pubClient.duplicate()
+
   io = new Server(server, {
     cors: {
       origin: allowedOrigins,
       methods: ['GET', 'POST'],
       credentials: true,
     },
+    adapter: createAdapter(pubClient, subClient),
   })
   // Apply authentication middleware
   io.use(authMiddleware)
