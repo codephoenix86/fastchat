@@ -1,7 +1,6 @@
-const { Message } = require('@models')
+const { Message, Chat } = require('@models')
 const { MESSAGE_STATUS } = require('@constants')
 const userRepository = require('./user.repository')
-const chatRepository = require('./chat.repository')
 
 class MessageRepository {
   async _populateMessages(messages) {
@@ -99,11 +98,19 @@ class MessageRepository {
 
   async getChatMessages(chatId, userId, options = {}) {
     const { cursor, limit = 50 } = options
-    const chat = await chatRepository.findById(chatId)
-    const lastClear = chat.participants.find((p) => p.user.id === userId)?.lastClear
-    if (!lastClear) {
+
+    // Optimally fetch ONLY the specific user's participant data to get lastClear
+    // This bypasses hydrating all 5,000 profiles in chatRepository.findById
+    const chat = await Chat.findOne(
+      { _id: chatId, 'participants.user': userId },
+      { 'participants.$': 1 }
+    ).lean()
+
+    if (!chat || !chat.participants || chat.participants.length === 0) {
       return null
     }
+
+    const lastClear = chat.participants[0].lastClear
 
     const query = { chat: chatId, createdAt: { $gt: lastClear } }
     if (cursor) {
